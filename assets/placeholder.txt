@@ -1,0 +1,10 @@
+# Assets Directory
+
+This directory should contain:
+- icon.png (1024x1024 app icon)
+- splash.png (splash screen image)
+- adaptive-icon.png (Android adaptive icon)
+- favicon.png (web favicon)
+- notification-icon.png (notification icon)
+
+For now, these are placeholder files. You can add your own assets here.

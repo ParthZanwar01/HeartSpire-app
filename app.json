@@ -1,0 +1,61 @@
+{
+  "expo": {
+    "name": "VitaMom",
+    "slug": "vitamom",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FEF7F7"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.vitamom.app",
+      "infoPlist": {
+        "NSUserNotificationsUsageDescription": "We need notification access to remind you to take your daily vitamins.",
+        "NSCameraUsageDescription": "We need camera access to scan supplement labels for analysis.",
+        "NSPhotoLibraryUsageDescription": "We need photo library access to pick supplement label images."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FEF7F7"
+      },
+      "package": "com.vitamom.app",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.VIBRATE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#FF69B4",
+          "defaultChannel": "vitamin-reminders"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "We need photo library access to pick supplement label images.",
+          "cameraPermission": "We need camera access to scan supplement labels for analysis."
+        }
+      ]
+    ]
+  }
+}
