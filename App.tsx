@@ -19,14 +19,12 @@ import ScanIngredients from './components/ScanIngredients';
 import ModernVitaminTracker from './components/ModernVitaminTracker';
 import BottomNavigation from './components/BottomNavigation';
 
-import {Colors} from 'react-native/Libraries/NewAppScreen';
-
 function App(): React.JSX.Element {
   const isDarkMode = useColorScheme() === 'dark';
   const [currentTab, setCurrentTab] = useState<'home' | 'scan' | 'tracker'>('home');
 
   const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : '#FEF7F7',
+    backgroundColor: isDarkMode ? '#1a1a1a' : '#FEF7F7',
   };
 
   const handleStartScanning = async () => {
