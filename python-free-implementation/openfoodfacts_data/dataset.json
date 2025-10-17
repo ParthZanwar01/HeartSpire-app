@@ -1,0 +1,273 @@
+{
+  "source": "OpenFoodFacts",
+  "total": 38,
+  "downloaded": 38,
+  "products": [
+    {
+      "code": "7394376616228",
+      "name": "Oat Drink Barista Edition",
+      "image_url": "https://images.openfoodfacts.org/images/products/739/437/661/6228/front_en.174.400.jpg",
+      "local_path": "openfoodfacts_data/images/7394376616228.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "5411188124689",
+      "name": "Hafer Milch",
+      "image_url": "https://images.openfoodfacts.org/images/products/541/118/812/4689/front_en.411.400.jpg",
+      "local_path": "openfoodfacts_data/images/5411188124689.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "3175681851849",
+      "name": "Pomme \ud83c\udf4f \ud83c\udf4e Noisette\ud83e\udd5c",
+      "image_url": "https://images.openfoodfacts.org/images/products/317/568/185/1849/front_en.216.400.jpg",
+      "local_path": "openfoodfacts_data/images/3175681851849.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "5010029000801",
+      "name": "Family Pack",
+      "image_url": "https://images.openfoodfacts.org/images/products/501/002/900/0801/front_en.60.400.jpg",
+      "local_path": "openfoodfacts_data/images/5010029000801.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "7613039490266",
+      "name": "Nesquik",
+      "image_url": "https://images.openfoodfacts.org/images/products/761/303/949/0266/front_en.146.400.jpg",
+      "local_path": "openfoodfacts_data/images/7613039490266.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "8410076610737",
+      "name": "Protein Cacahuetes\ud83e\udd5c & Chocolat\ud83c\udf6b",
+      "image_url": "https://images.openfoodfacts.org/images/products/841/007/661/0737/front_fr.68.400.jpg",
+      "local_path": "openfoodfacts_data/images/8410076610737.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "5060088701478",
+      "name": "Cocoa Orange Fruit & Nut Bars",
+      "image_url": "https://images.openfoodfacts.org/images/products/506/008/870/1478/front_en.65.400.jpg",
+      "local_path": "openfoodfacts_data/images/5060088701478.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "4058172309250",
+      "name": "Magnesium",
+      "image_url": "https://images.openfoodfacts.org/images/products/405/817/230/9250/front_en.3.400.jpg",
+      "local_path": "openfoodfacts_data/images/4058172309250.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "6111126005696",
+      "name": "Proteines Mangue",
+      "image_url": "https://images.openfoodfacts.org/images/products/611/112/600/5696/front_fr.31.400.jpg",
+      "local_path": "openfoodfacts_data/images/6111126005696.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "4056489724070",
+      "name": "HIGH PROTEIN Mousse Schoko",
+      "image_url": "https://images.openfoodfacts.org/images/products/405/648/972/4070/front_en.117.400.jpg",
+      "local_path": "openfoodfacts_data/images/4056489724070.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "4000177158319",
+      "name": "Multivitamin Capri-Sun",
+      "image_url": "https://images.openfoodfacts.org/images/products/400/017/715/8319/front_en.75.400.jpg",
+      "local_path": "openfoodfacts_data/images/4000177158319.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "4058172309519",
+      "name": "Multivitamin",
+      "image_url": "https://images.openfoodfacts.org/images/products/405/817/230/9519/front_en.47.400.jpg",
+      "local_path": "openfoodfacts_data/images/4058172309519.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "8718836395802",
+      "name": "Multivitamin",
+      "image_url": "https://images.openfoodfacts.org/images/products/871/883/639/5802/front_fr.34.400.jpg",
+      "local_path": "openfoodfacts_data/images/8718836395802.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "8723300710746",
+      "name": "Multi A-Z One-a-Day",
+      "image_url": "https://images.openfoodfacts.org/images/products/872/330/071/0746/front_en.18.400.jpg",
+      "local_path": "openfoodfacts_data/images/8723300710746.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "4000177605004",
+      "name": "Caprisonne, Multivitamin",
+      "image_url": "https://images.openfoodfacts.org/images/products/400/017/760/5004/front_de.62.400.jpg",
+      "local_path": "openfoodfacts_data/images/4000177605004.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "0858158005046",
+      "name": "The essential prenatal",
+      "image_url": "https://images.openfoodfacts.org/images/products/085/815/800/5046/front_en.3.400.jpg",
+      "local_path": "openfoodfacts_data/images/0858158005046.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "0027917019505",
+      "name": "Prenatal essential multi",
+      "image_url": "https://images.openfoodfacts.org/images/products/002/791/701/9505/front_en.7.400.jpg",
+      "local_path": "openfoodfacts_data/images/0027917019505.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "21901768",
+      "name": "vitamin angel, women'prenatal",
+      "image_url": "https://images.openfoodfacts.org/images/products/000/002/190/1768/front_es.7.400.jpg",
+      "local_path": "openfoodfacts_data/images/21901768.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "5411188112709",
+      "name": "Ger\u00f6stete Mandel Ohne Zucker",
+      "image_url": "https://images.openfoodfacts.org/images/products/541/118/811/2709/front_en.720.400.jpg",
+      "local_path": "openfoodfacts_data/images/5411188112709.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "5411188124689",
+      "name": "Hafer Milch",
+      "image_url": "https://images.openfoodfacts.org/images/products/541/118/812/4689/front_en.411.400.jpg",
+      "local_path": "openfoodfacts_data/images/5411188124689.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "5411188103387",
+      "name": "Vanille au soja",
+      "image_url": "https://images.openfoodfacts.org/images/products/541/118/810/3387/front_en.319.400.jpg",
+      "local_path": "openfoodfacts_data/images/5411188103387.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "5411188110835",
+      "name": "Mandelmilch mit Zucker",
+      "image_url": "https://images.openfoodfacts.org/images/products/541/118/811/0835/front_en.617.400.jpg",
+      "local_path": "openfoodfacts_data/images/5411188110835.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "3229820787015",
+      "name": "BjORG AMANDE ALMOND SANS SUGRES- NO SUGAR",
+      "image_url": "https://images.openfoodfacts.org/images/products/322/982/078/7015/front_en.165.400.jpg",
+      "local_path": "openfoodfacts_data/images/3229820787015.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "7394376616228",
+      "name": "Oat Drink Barista Edition",
+      "image_url": "https://images.openfoodfacts.org/images/products/739/437/661/6228/front_en.174.400.jpg",
+      "local_path": "openfoodfacts_data/images/7394376616228.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "5411188124689",
+      "name": "Hafer Milch",
+      "image_url": "https://images.openfoodfacts.org/images/products/541/118/812/4689/front_en.411.400.jpg",
+      "local_path": "openfoodfacts_data/images/5411188124689.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "3175681851849",
+      "name": "Pomme \ud83c\udf4f \ud83c\udf4e Noisette\ud83e\udd5c",
+      "image_url": "https://images.openfoodfacts.org/images/products/317/568/185/1849/front_en.216.400.jpg",
+      "local_path": "openfoodfacts_data/images/3175681851849.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "5010029000801",
+      "name": "Family Pack",
+      "image_url": "https://images.openfoodfacts.org/images/products/501/002/900/0801/front_en.60.400.jpg",
+      "local_path": "openfoodfacts_data/images/5010029000801.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "7613039490266",
+      "name": "Nesquik",
+      "image_url": "https://images.openfoodfacts.org/images/products/761/303/949/0266/front_en.146.400.jpg",
+      "local_path": "openfoodfacts_data/images/7613039490266.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "5010058089792",
+      "name": "Feroglobin gentle iron liquid",
+      "image_url": "https://images.openfoodfacts.org/images/products/501/005/808/9792/front_en.9.400.jpg",
+      "local_path": "openfoodfacts_data/images/5010058089792.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "5000453121500",
+      "name": "Multivitamin + Iron",
+      "image_url": "https://images.openfoodfacts.org/images/products/500/045/312/1500/front_en.17.400.jpg",
+      "local_path": "openfoodfacts_data/images/5000453121500.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "0837229007417",
+      "name": "Sprouted Protein Bar Double Chocolate",
+      "image_url": "https://images.openfoodfacts.org/images/products/083/722/900/7417/front_en.24.400.jpg",
+      "local_path": "openfoodfacts_data/images/0837229007417.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "5000453123856",
+      "name": "multivitamins + iron",
+      "image_url": "https://images.openfoodfacts.org/images/products/500/045/312/3856/front_en.3.400.jpg",
+      "local_path": "openfoodfacts_data/images/5000453123856.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "0837229007431",
+      "name": "Sprouted protein",
+      "image_url": "https://images.openfoodfacts.org/images/products/083/722/900/7431/front_en.11.400.jpg",
+      "local_path": "openfoodfacts_data/images/0837229007431.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "20005733",
+      "name": "Cerneaux de Noix",
+      "image_url": "https://images.openfoodfacts.org/images/products/000/002/000/5733/front_en.596.400.jpg",
+      "local_path": "openfoodfacts_data/images/20005733.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "3366321051983",
+      "name": "Om\u00e9ga 3\u00ae Doux",
+      "image_url": "https://images.openfoodfacts.org/images/products/336/632/105/1983/front_fr.132.400.jpg",
+      "local_path": "openfoodfacts_data/images/3366321051983.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "8410111211202",
+      "name": "Atun",
+      "image_url": "https://images.openfoodfacts.org/images/products/841/011/121/1202/front_es.3.400.jpg",
+      "local_path": "openfoodfacts_data/images/8410111211202.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "3366321051686",
+      "name": "Om\u00e9ga 3 Doux Tartine & Cuisson",
+      "image_url": "https://images.openfoodfacts.org/images/products/336/632/105/1686/front_fr.121.400.jpg",
+      "local_path": "openfoodfacts_data/images/3366321051686.jpg",
+      "downloaded": true
+    },
+    {
+      "code": "6111024001202",
+      "name": "Huile de tournesol",
+      "image_url": "https://images.openfoodfacts.org/images/products/611/102/400/1202/front_fr.19.400.jpg",
+      "local_path": "openfoodfacts_data/images/6111024001202.jpg",
+      "downloaded": true
+    }
+  ]
+}

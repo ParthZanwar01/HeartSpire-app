@@ -7,7 +7,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#FEF7F7"
     },
@@ -20,12 +20,13 @@
       "infoPlist": {
         "NSUserNotificationsUsageDescription": "We need notification access to remind you to take your daily vitamins.",
         "NSCameraUsageDescription": "We need camera access to scan supplement labels for analysis.",
-        "NSPhotoLibraryUsageDescription": "We need photo library access to pick supplement label images."
+        "NSPhotoLibraryUsageDescription": "We need photo library access to pick supplement label images.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#FEF7F7"
       },
       "package": "com.vitamom.app",
@@ -34,17 +35,18 @@
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.POST_NOTIFICATIONS",
-        "android.permission.VIBRATE"
+        "android.permission.VIBRATE",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/icon.png"
     },
     "plugins": [
       [
         "expo-notifications",
         {
-          "icon": "./assets/notification-icon.png",
+          "icon": "./assets/icon.png",
           "color": "#FF69B4",
           "defaultChannel": "vitamin-reminders"
         }
@@ -56,6 +58,12 @@
           "cameraPermission": "We need camera access to scan supplement labels for analysis."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "3c94634b-af16-4eae-865f-a2e517dc496e"
+      }
+    },
+    "owner": "themathgenius01"
   }
 }
