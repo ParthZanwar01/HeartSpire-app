@@ -35,6 +35,67 @@ except Exception as e:
     OCR_AVAILABLE = False
 
 
+def generate_ingredient_descriptions(ingredients):
+    """Generate AI descriptions for each ingredient using LLaVA"""
+    if not LLAVA_AVAILABLE or not ingredients:
+        return ingredients
+    
+    try:
+        import requests
+        
+        # Create a prompt for all ingredients at once
+        ingredient_names = [ing.get('name', '') for ing in ingredients if ing.get('name')]
+        if not ingredient_names:
+            return ingredients
+        
+        prompt = f"""For each of these prenatal vitamin ingredients, explain what it does during pregnancy in 1-2 sentences:
+{', '.join(ingredient_names)}
+
+Format your response as JSON:
+{{"descriptions": [{{"name": "ingredient name", "description": "what it does during pregnancy"}}]}}
+
+Focus on benefits for mom and baby. Keep each description under 100 characters."""
+        
+        # Call LLaVA for text generation
+        response = requests.post(
+            "http://localhost:11434/api/generate",
+            json={
+                "model": "llava",
+                "prompt": prompt,
+                "stream": False
+            },
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            response_text = result.get('response', '')
+            
+            # Try to parse JSON from response
+            import json
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', response_text)
+            if json_match:
+                descriptions_data = json.loads(json_match.group())
+                descriptions_map = {
+                    desc['name'].lower(): desc['description']
+                    for desc in descriptions_data.get('descriptions', [])
+                }
+                
+                # Add descriptions to ingredients
+                for ing in ingredients:
+                    ing_name = ing.get('name', '').lower()
+                    if ing_name in descriptions_map:
+                        ing['description'] = descriptions_map[ing_name]
+                
+                print(f"✅ Generated descriptions for {len(descriptions_map)} ingredients")
+        
+    except Exception as e:
+        print(f"⚠️ Could not generate descriptions: {e}")
+    
+    return ingredients
+
+
 @app.route('/', methods=['GET'])
 def home():
     """Home endpoint"""
@@ -80,7 +141,8 @@ def analyze():
     Request:
     {
         "image": "base64_encoded_image",
-        "method": "llava" | "ocr" (optional)
+        "method": "llava" | "ocr" (optional),
+        "includeDescriptions": true (optional) - generate ingredient descriptions
     }
     
     Response:
@@ -89,7 +151,7 @@ def analyze():
         "productName": "...",
         "servingSize": "...",
         "ingredients": [
-            {"name": "...", "amount": "...", "unit": "...", "percentDailyValue": "..."}
+            {"name": "...", "amount": "...", "unit": "...", "percentDailyValue": "...", "description": "..."}
         ],
         "warnings": [...],
         "method": "llava",
@@ -166,6 +228,11 @@ def analyze():
             os.unlink(tmp_path)
         except:
             pass
+        
+        # Generate ingredient descriptions if requested
+        if data.get('includeDescriptions', False) and result.get('ingredients'):
+            print(f"🤖 Generating ingredient descriptions...")
+            result['ingredients'] = generate_ingredient_descriptions(result['ingredients'])
         
         # Add processing time
         result['processingTime'] = round(time.time() - start_time, 2)

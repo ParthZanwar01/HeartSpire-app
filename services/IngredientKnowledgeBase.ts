@@ -14,6 +14,7 @@ export interface IngredientInfo {
   };
   conversionFactors?: { [unit: string]: number }; // to base unit
   pregnancyRecommendation?: string;
+  benefits?: string; // What this ingredient does
   warnings?: string[];
 }
 
@@ -29,6 +30,7 @@ export const INGREDIENT_DATABASE: { [key: string]: IngredientInfo } = {
     },
     conversionFactors: { 'IU': 0.3, 'mcg': 1, 'mg': 1000 },
     pregnancyRecommendation: '770 mcg (2,565 IU) daily',
+    benefits: 'Supports fetal eye, bone, and skin development. Essential for your immune system and vision.',
     warnings: ['High doses (>3000 mcg) may be harmful during pregnancy'],
   },
   
@@ -43,6 +45,7 @@ export const INGREDIENT_DATABASE: { [key: string]: IngredientInfo } = {
     },
     conversionFactors: { 'mg': 1, 'g': 1000 },
     pregnancyRecommendation: '85 mg daily',
+    benefits: 'Boosts immune system, helps your body absorb iron, and supports baby\'s tissue and bone growth.',
   },
   
   'vitamin-d': {
@@ -56,6 +59,7 @@ export const INGREDIENT_DATABASE: { [key: string]: IngredientInfo } = {
     },
     conversionFactors: { 'IU': 1, 'mcg': 40, 'μg': 40 },
     pregnancyRecommendation: '600 IU (15 mcg) daily',
+    benefits: 'Essential for bone health and calcium absorption. Supports baby\'s bone and teeth development.',
   },
   
   'vitamin-e': {
@@ -154,6 +158,7 @@ export const INGREDIENT_DATABASE: { [key: string]: IngredientInfo } = {
     },
     conversionFactors: { 'mcg': 1, 'mg': 1000 },
     pregnancyRecommendation: '600 mcg daily (critical for neural tube development)',
+    benefits: 'CRITICAL: Prevents neural tube defects like spina bifida. Essential for baby\'s brain and spinal cord development.',
     warnings: ['Essential during pregnancy - prevents neural tube defects'],
   },
   
@@ -192,6 +197,7 @@ export const INGREDIENT_DATABASE: { [key: string]: IngredientInfo } = {
     },
     conversionFactors: { 'mg': 1, 'g': 1000 },
     pregnancyRecommendation: '1000-1300 mg daily',
+    benefits: 'Builds strong bones and teeth for you and baby. Helps muscles, nerves, and heart function properly.',
   },
   
   'iron': {
@@ -204,6 +210,7 @@ export const INGREDIENT_DATABASE: { [key: string]: IngredientInfo } = {
       adult: { min: 8, max: 45, unit: 'mg' },
     },
     pregnancyRecommendation: '27 mg daily',
+    benefits: 'Prevents anemia and supports increased blood production during pregnancy. Delivers oxygen to baby.',
     warnings: ['May cause constipation', 'Take with vitamin C for better absorption'],
   },
   
@@ -241,6 +248,7 @@ export const INGREDIENT_DATABASE: { [key: string]: IngredientInfo } = {
       adult: { min: 150, max: 1100, unit: 'mcg' },
     },
     pregnancyRecommendation: '220 mcg daily (critical for baby brain development)',
+    benefits: 'CRITICAL: Essential for baby\'s brain development and thyroid function. Supports healthy metabolism.',
   },
   
   'dha': {
@@ -253,6 +261,7 @@ export const INGREDIENT_DATABASE: { [key: string]: IngredientInfo } = {
       adult: { min: 250, max: 1000, unit: 'mg' },
     },
     pregnancyRecommendation: '200-300 mg daily (supports baby brain/eye development)',
+    benefits: 'CRITICAL: Supports baby\'s brain and eye development. Important for cognitive function throughout pregnancy.',
   },
   
   'epa': {

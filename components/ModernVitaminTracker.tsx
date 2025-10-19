@@ -17,6 +17,14 @@ interface ModernVitaminTrackerProps {
 interface VitaminLog {
   date: string;
   vitamins: string[];
+  scannedProduct?: string;
+  scannedData?: Array<{
+    name: string;
+    amount?: string;
+    unit?: string;
+    percentDailyValue?: string;
+    description?: string;
+  }>;
 }
 
 const ModernVitaminTracker: React.FC<ModernVitaminTrackerProps> = ({onBack}) => {
@@ -132,6 +140,7 @@ const ModernVitaminTracker: React.FC<ModernVitaminTrackerProps> = ({onBack}) => 
           {recentIntake.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyText}>No recent vitamin intake recorded</Text>
+              <Text style={styles.emptySubtext}>Scan a vitamin label to get started!</Text>
             </View>
           ) : (
             recentIntake.map((log, index) => (
@@ -140,8 +149,16 @@ const ModernVitaminTracker: React.FC<ModernVitaminTrackerProps> = ({onBack}) => 
                   <Text style={styles.intakeCheckmark}>✓</Text>
                 </View>
                 <View style={styles.intakeInfo}>
-                  <Text style={styles.intakeTitle}>Vitamins Taken</Text>
+                  <Text style={styles.intakeTitle}>
+                    {log.scannedProduct || 'Vitamins Taken'}
+                  </Text>
                   <Text style={styles.intakeDate}>{formatDate(log.date)}</Text>
+                  {log.scannedData && log.scannedData.length > 0 && (
+                    <Text style={styles.intakeVitamins}>
+                      {log.scannedData.length} ingredients: {log.scannedData.slice(0, 3).map(v => v.name).join(', ')}
+                      {log.scannedData.length > 3 && ` +${log.scannedData.length - 3} more`}
+                    </Text>
+                  )}
                 </View>
               </View>
             ))
@@ -247,6 +264,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#9E9E9E',
     textAlign: 'center',
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#BDBDBD',
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
   intakeCard: {
     flexDirection: 'row',
@@ -287,6 +311,12 @@ const styles = StyleSheet.create({
   intakeDate: {
     fontSize: 14,
     color: '#9E9E9E',
+    marginBottom: 4,
+  },
+  intakeVitamins: {
+    fontSize: 13,
+    color: '#666666',
+    lineHeight: 18,
   },
 });
 

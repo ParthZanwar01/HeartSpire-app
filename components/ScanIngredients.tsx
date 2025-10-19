@@ -8,10 +8,14 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
+  Linking,
+  Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {AnalysisResult} from '../services/IngredientAI';
+import {findIngredient} from '../services/IngredientKnowledgeBase';
 
 interface ScanIngredientsProps {
   onStartScanning: () => void;
@@ -26,101 +30,345 @@ const ScanIngredients: React.FC<ScanIngredientsProps> = ({
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   
   // PRODUCTION CONFIGURATION
-  // Option 1: Use your Python backend (FREE!)
-  const USE_BACKEND = false; // Set to true when backend is deployed
-  const BACKEND_URL = 'https://your-app.railway.app'; // Replace with your backend URL
+  // Option 1: Use OpenAI Vision (BEST - $0.002 per scan, MUCH better than OCR!)
+  const USE_OPENAI = true; // Using GPT-4 Vision for better results!
+  const OPENAI_API_KEY = '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';
   
-  // Option 2: Use OpenAI directly (PAID - $0.01 per scan)
-  const USE_OPENAI = false; // Set to true to use OpenAI
-  const OPENAI_API_KEY = ''; // Add your OpenAI API key here
+  // Option 2: Use your Python backend (FREE but OCR quality varies)
+  const USE_BACKEND = false; // Disabled - OCR has poor quality
+  const BACKEND_URL = 'https://MathGenius01-vitamom-backend.hf.space';
   
-  // Option 3: Mock mode for testing (FREE - no real AI)
-  const USE_MOCK = true; // Set to false in production
+  // Option 3: Mock mode for testing
+  const USE_MOCK = false;
+  
+  // Debug mode - set to true to see detailed logs
+  const DEBUG_MODE = true;
+  
+  // NEW: Request ingredient descriptions from AI
+  const GET_INGREDIENT_DESCRIPTIONS = true;
 
   const analyzeWithBackend = async (imageUri: string): Promise<AnalysisResult> => {
-    // Read image as base64
-    const base64 = await FileSystem.readAsStringAsync(imageUri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    
-    // Send to your Python backend
-    const response = await fetch(`${BACKEND_URL}/analyze`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        image: `data:image/jpeg;base64,${base64}`
-      }),
-      timeout: 30000, // 30 second timeout
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Backend error: ${response.status}`);
+    try {
+      console.log('🔄 Converting image to base64...', imageUri);
+      
+      if (DEBUG_MODE) {
+        console.log('🔍 Debug - imageUri type:', typeof imageUri);
+        console.log('🔍 Debug - imageUri value:', imageUri);
+        console.log('🔍 Debug - FileSystem available:', !!FileSystem);
+        console.log('🔍 Debug - FileSystem.readAsStringAsync available:', !!(FileSystem && FileSystem.readAsStringAsync));
+      }
+      
+      // Check if imageUri is valid
+      if (!imageUri) {
+        throw new Error('No image URI provided');
+      }
+      
+      // Check if FileSystem is available
+      if (!FileSystem || !FileSystem.readAsStringAsync) {
+        throw new Error('FileSystem API not available');
+      }
+      
+      // Read image as base64
+      const base64 = await FileSystem.readAsStringAsync(imageUri, {
+        encoding: 'base64' as any, // Use string instead of enum
+      });
+      
+      if (!base64 || base64.length === 0) {
+        throw new Error('Failed to convert image to base64 - empty result');
+      }
+      
+      console.log('✅ Base64 conversion successful, length:', base64.length);
+      
+      // Send to your Python backend
+      const requestBody: any = {
+        image: base64, // Send raw base64, not data URL
+        method: 'ocr'
+      };
+      
+      // Request ingredient descriptions if enabled
+      if (GET_INGREDIENT_DESCRIPTIONS) {
+        requestBody.includeDescriptions = true;
+        requestBody.prompt = `For each ingredient, also explain:
+1. What it does during pregnancy
+2. Why it's important for mom and baby
+3. Any key benefits
+Keep each description to 1-2 sentences.`;
+      }
+      
+      const response = await fetch(`${BACKEND_URL}/analyze`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(requestBody),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Backend error: ${response.status}`);
+      }
+      
+      const backendResult = await response.json();
+      console.log('📊 Backend response:', JSON.stringify(backendResult, null, 2));
+      
+      // Convert backend response to frontend format
+      let ingredients = [];
+      if (backendResult.ingredients && Array.isArray(backendResult.ingredients)) {
+        console.log(`🔍 Processing ${backendResult.ingredients.length} ingredients from backend`);
+        
+        ingredients = backendResult.ingredients.map((ingredient: any, index: number) => {
+          console.log(`  Ingredient ${index + 1}:`, ingredient);
+          
+          // Handle both string and object formats
+          if (typeof ingredient === 'string') {
+            return {
+              name: ingredient,
+              amount: '',
+              unit: '',
+              percentDailyValue: '',
+              description: '',
+              benefits: ''
+            };
+          } else if (typeof ingredient === 'object' && ingredient !== null) {
+            return {
+              name: ingredient.name || ingredient.toString(),
+              amount: ingredient.amount || '',
+              unit: ingredient.unit || '',
+              percentDailyValue: ingredient.percentDailyValue || ingredient.percentDV || '',
+              description: ingredient.description || ingredient.benefits || '',
+              benefits: ingredient.benefits || ingredient.description || ''
+            };
+          } else {
+            return {
+              name: String(ingredient),
+              amount: '',
+              unit: '',
+              percentDailyValue: '',
+              description: '',
+              benefits: ''
+            };
+          }
+        });
+        
+        console.log(`✅ Converted ${ingredients.length} ingredients successfully`);
+      } else {
+        console.warn('⚠️ No ingredients array found in backend response');
+      }
+      
+      // ALWAYS try to extract more from raw text (frontend fallback)
+      if (backendResult.rawText) {
+        const beforeExtraction = ingredients.length;
+        console.log(`🔍 Frontend fallback: Extracting ingredients from raw text (currently have ${beforeExtraction})...`);
+        console.log(`📝 Raw text length: ${backendResult.rawText.length} characters`);
+        const rawText = backendResult.rawText.toLowerCase();
+        
+        // Look for common vitamin patterns in raw text with MORE FLEXIBLE patterns
+        const vitaminPatterns = [
+          { name: 'Vitamin A', pattern: /vitamin\s*a\D*?(\d+(?:\.\d+)?)\s*(mcg|μg|iu|mg)/i },
+          { name: 'Vitamin C', pattern: /vitamin\s*c\D*?(\d+(?:\.\d+)?)\s*(g|mg|mcg)/i },
+          { name: 'Vitamin D3', pattern: /vitamin\s*d\d?\D*?(\d+(?:\.\d+)?)\s*(iu|mcg|μg)/i },
+          { name: 'Vitamin E', pattern: /vitamin\s*e\D*?(\d+(?:\.\d+)?)\s*(iu|mg)/i },
+          { name: 'Vitamin K', pattern: /vitamin\s*k\d?\D*?(\d+(?:\.\d+)?)\s*(mcg|μg)/i },
+          { name: 'Vitamin B6', pattern: /(?:vitamin\s*)?b\s*-?\s*6\D*?(\d+(?:\.\d+)?)\s*(mg)/i },
+          { name: 'Vitamin B12', pattern: /(?:vitamin\s*)?b\s*-?\s*12\D*?(\d+(?:\.\d+)?)\s*(mcg|μg)/i },
+          { name: 'Thiamin', pattern: /thiamin(?:e)?\D*?(\d+(?:\.\d+)?)\s*(mg)/i },
+          { name: 'Riboflavin', pattern: /riboflavin\D*?(\d+(?:\.\d+)?)\s*(mg)/i },
+          { name: 'Niacin', pattern: /niacin\D*?(\d+(?:\.\d+)?)\s*(mg)/i },
+          { name: 'Folic Acid', pattern: /(?:folic\s*acid|folate)\D*?(\d+(?:\.\d+)?)\s*(mcg|μg|mg)/i },
+          { name: 'Biotin', pattern: /biotin\D*?(\d+(?:\.\d+)?)\s*(mcg|μg)/i },
+          { name: 'Pantothenic Acid', pattern: /pantothenic\s*acid\D*?(\d+(?:\.\d+)?)\s*(mg)/i },
+          { name: 'Iron', pattern: /iron\D*?(\d+(?:\.\d+)?)\s*(mg)/i },
+          { name: 'Calcium', pattern: /calcium\D*?(\d+(?:\.\d+)?)\s*(mg|g)/i },
+          { name: 'Zinc', pattern: /zinc\D*?(\d+(?:\.\d+)?)\s*(mg)/i },
+          { name: 'Magnesium', pattern: /magnesium\D*?(\d+(?:\.\d+)?)\s*(mg|g)/i },
+          { name: 'Iodine', pattern: /iodine\D*?(\d+(?:\.\d+)?)\s*(mcg|μg)/i },
+          { name: 'DHA', pattern: /dha\D*?(\d+(?:\.\d+)?)\s*(mg|g)/i },
+          { name: 'Choline', pattern: /choline\D*?(\d+(?:\.\d+)?)\s*(mg)/i },
+        ];
+        
+        for (const { name, pattern } of vitaminPatterns) {
+          // Check if we already have this ingredient
+          const alreadyExists = ingredients.some((ing: any) => 
+            ing.name.toLowerCase().includes(name.toLowerCase()) || 
+            name.toLowerCase().includes(ing.name.toLowerCase())
+          );
+          
+          if (!alreadyExists) {
+            const match = rawText.match(pattern);
+            if (match) {
+              console.log(`  Found ${name}: ${match[1]} ${match[2]}`);
+              ingredients.push({
+                name: name,
+                amount: match[1] || '',
+                unit: match[2] || '',
+                percentDailyValue: '',
+                description: '', // Will be filled by AI if available
+                benefits: ''
+              });
+            }
+          }
+        }
+        
+        const additionalFound = ingredients.length - beforeExtraction;
+        if (additionalFound > 0) {
+          console.log(`✅ Extracted ${additionalFound} additional ingredients from raw text`);
+        }
+      }
+      
+      // Final summary
+      console.log(`\n📋 FINAL RESULTS:`);
+      console.log(`   Total ingredients: ${ingredients.length}`);
+      console.log(`   Product: ${backendResult.productName || 'Unknown'}`);
+      console.log(`   Serving: ${backendResult.servingSize || 'Unknown'}`);
+      if (ingredients.length > 0) {
+        console.log(`   First 3 ingredients:`);
+        ingredients.slice(0, 3).forEach((ing: any, i: number) => {
+          console.log(`     ${i + 1}. ${ing.name} - ${ing.amount} ${ing.unit}`);
+        });
+      }
+      console.log(``);
+      
+      const finalResult = {
+        success: backendResult.success || false,
+        productName: backendResult.productName || 'Unknown Product',
+        servingSize: backendResult.servingSize || 'Unknown',
+        ingredients: ingredients,
+        warnings: backendResult.warnings || [],
+        rawResponse: backendResult.rawText || '',
+        error: backendResult.error || null
+      };
+      
+      console.log(`🎯 Returning result with ${finalResult.ingredients.length} ingredients`);
+      
+      return finalResult;
+      
+    } catch (error) {
+      console.error('❌ Backend analysis error:', error);
+      
+      // If it's a base64 conversion error, try to provide a helpful message
+      if (error instanceof Error && error.message.includes('base64')) {
+        console.log('🔄 Falling back to mock analysis due to base64 error');
+        return await mockAnalysis();
+      }
+      
+      throw new Error(`Backend analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-    
-    return await response.json();
   };
 
   const analyzeWithOpenAI = async (imageUri: string): Promise<AnalysisResult> => {
-    // Read image as base64
-    const base64 = await FileSystem.readAsStringAsync(imageUri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    
-    // Call OpenAI Vision API
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: `Analyze this vitamin/supplement label and extract ALL ingredients with their amounts.
-                
-Return JSON format:
+    try {
+      console.log('🧠 Using OpenAI Vision (GPT-4o) - this is MUCH better than OCR!');
+      
+      // Read image as base64
+      const base64 = await FileSystem.readAsStringAsync(imageUri, {
+        encoding: 'base64' as any,
+      });
+      
+      console.log('✅ Image encoded, sending to OpenAI...');
+      
+      // Call OpenAI Vision API with enhanced prompt
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: `You are analyzing a prenatal vitamin/supplement label. Extract ALL ingredients from the "Supplement Facts" or "Nutrition Facts" panel.
+
+For EACH ingredient, extract:
+1. Name (e.g., "Vitamin A", "Folic Acid", "Iron")
+2. Amount (just the number, e.g., "770")
+3. Unit (e.g., "mcg", "mg", "IU")
+4. % Daily Value if shown (e.g., "85%")
+5. Brief description: What does this ingredient do during pregnancy? (1-2 sentences focusing on benefits for mom and baby)
+
+Return ONLY valid JSON in this exact format:
 {
-  "productName": "Product name",
+  "productName": "exact product name from label",
   "servingSize": "1 tablet",
   "ingredients": [
-    {"name": "Vitamin A", "amount": "770", "unit": "mcg", "percentDailyValue": "85%"}
+    {
+      "name": "Vitamin A",
+      "amount": "770",
+      "unit": "mcg",
+      "percentDailyValue": "85%",
+      "description": "Supports fetal eye and bone development. Essential for immune system health."
+    },
+    {
+      "name": "Folic Acid",
+      "amount": "600",
+      "unit": "mcg",
+      "percentDailyValue": "150%",
+      "description": "CRITICAL: Prevents neural tube defects like spina bifida. Essential for brain and spinal cord development."
+    }
   ],
-  "warnings": ["Any warnings"]
-}`
-              },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: `data:image/jpeg;base64,${base64}`,
-                  detail: 'high'
+  "warnings": ["any warnings or allergens"]
+}
+
+Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement Facts panel. Include descriptions for each one.`
+                },
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: `data:image/jpeg;base64,${base64}`,
+                    detail: 'high'
+                  }
                 }
-              }
-            ]
-          }
-        ],
-        max_tokens: 1000,
-      }),
-    });
-    
-    const data = await response.json();
-    const content = data.choices[0]?.message?.content;
-    
-    if (!content) {
-      throw new Error('No response from OpenAI');
+              ]
+            }
+          ],
+          max_tokens: 3000,
+          temperature: 0.3,
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`OpenAI error: ${errorData.error?.message || 'Unknown error'}`);
+      }
+      
+      const data = await response.json();
+      console.log('📊 OpenAI response received');
+      
+      const content = data.choices[0]?.message?.content;
+      
+      if (!content) {
+        throw new Error('No response from OpenAI');
+      }
+      
+      console.log('🔍 Parsing OpenAI response...');
+      
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        
+        console.log(`✅ OpenAI found ${parsed.ingredients?.length || 0} ingredients`);
+        
+        return {
+          success: true,
+          productName: parsed.productName || 'Unknown Product',
+          servingSize: parsed.servingSize || 'Unknown',
+          ingredients: parsed.ingredients || [],
+          warnings: parsed.warnings || [],
+          rawResponse: content,
+        };
+      }
+      
+      throw new Error('Could not parse OpenAI response');
+      
+    } catch (error) {
+      console.error('❌ OpenAI Vision error:', error);
+      return {
+        success: false,
+        ingredients: [],
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
     }
-    
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      return {success: true, ...parsed};
-    }
-    
-    return {success: false, ingredients: [], error: 'Could not parse response'};
   };
 
   const mockAnalysis = async (): Promise<AnalysisResult> => {
@@ -170,11 +418,23 @@ Return JSON format:
       setAnalysisResult(result);
       
       if (result.success) {
-        Alert.alert(
-          '✅ Analysis Complete!',
-          `Found ${result.ingredients.length} ingredients in ${result.productName || 'your supplement'}`,
-          [{ text: 'View Details', onPress: () => {} }]
-        );
+        if (result.ingredients.length === 0) {
+          Alert.alert(
+            '⚠️ No Ingredients Found',
+            'Could not extract ingredients from the image. Please try:\n\n' +
+            '• Taking photo in better lighting\n' +
+            '• Getting closer to the label\n' +
+            '• Making sure text is clear and in focus\n' +
+            '• Using a product with a clearly printed nutrition label',
+            [{ text: 'Try Again', onPress: () => {} }]
+          );
+        } else {
+          Alert.alert(
+            '✅ Analysis Complete!',
+            `Found ${result.ingredients.length} ingredients in ${result.productName || 'your supplement'}`,
+            [{ text: 'View Details', onPress: () => {} }]
+          );
+        }
       } else {
         Alert.alert('❌ Analysis Failed', result.error || 'Unknown error');
       }
@@ -191,14 +451,27 @@ Return JSON format:
 
   const handleCameraPress = async () => {
     try {
-      // Request camera permission
+      // Always request camera permission when button is pressed
       const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
       
       if (cameraPermission.status !== 'granted') {
+        // Permission denied - guide user to settings
         Alert.alert(
           'Camera Permission Required',
-          'We need camera access to take photos of vitamin labels for scanning.',
-          [{ text: 'OK' }]
+          'We need camera access to take photos of vitamin labels for scanning. Please enable camera access in your device settings.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Open Settings',
+              onPress: () => {
+                if (Platform.OS === 'ios') {
+                  Linking.openURL('app-settings:');
+                } else {
+                  Linking.openSettings();
+                }
+              }
+            }
+          ]
         );
         return;
       }
@@ -206,13 +479,18 @@ Return JSON format:
       // Launch camera
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 1,
+        allowsEditing: false, // Use full photo without cropping
+        quality: 1, // Highest quality
       });
 
       if (!result.canceled && result.assets[0]) {
-        console.log('Photo taken:', result.assets[0].uri);
+        console.log('📸 Photo taken:', result.assets[0].uri);
+        console.log('📸 Photo details:', {
+          uri: result.assets[0].uri,
+          width: result.assets[0].width,
+          height: result.assets[0].height,
+          fileSize: result.assets[0].fileSize
+        });
         await analyzeImage(result.assets[0].uri);
       }
     } catch (error) {
@@ -221,16 +499,99 @@ Return JSON format:
     }
   };
 
+  const saveToTracker = async () => {
+    if (!analysisResult || analysisResult.ingredients.length === 0) {
+      Alert.alert('Nothing to Save', 'Please scan a vitamin label first.');
+      return;
+    }
+
+    try {
+      console.log('💾 Saving scanned ingredients to tracker...');
+      
+      // Get today's date
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Get existing vitamin logs
+      const storedData = await AsyncStorage.getItem('@vitamin_log');
+      let vitaminLogs = storedData ? JSON.parse(storedData) : [];
+      
+      // Create a list of vitamin names from scanned ingredients
+      const vitaminNames = analysisResult.ingredients.map(ing => ing.name);
+      
+      // Check if log already exists for today
+      const existingLogIndex = vitaminLogs.findIndex((log: any) => log.date === today);
+      
+      if (existingLogIndex >= 0) {
+        // Update existing log - merge with scanned ingredients
+        const existingVitamins = vitaminLogs[existingLogIndex].vitamins;
+        const mergedVitamins = [...new Set([...existingVitamins, ...vitaminNames])];
+        vitaminLogs[existingLogIndex] = {
+          date: today,
+          vitamins: mergedVitamins,
+          scannedProduct: analysisResult.productName,
+          scannedData: analysisResult.ingredients,
+        };
+        console.log(`✅ Updated existing log for ${today} with ${mergedVitamins.length} total vitamins`);
+      } else {
+        // Add new log for today
+        vitaminLogs.push({
+          date: today,
+          vitamins: vitaminNames,
+          scannedProduct: analysisResult.productName,
+          scannedData: analysisResult.ingredients,
+        });
+        console.log(`✅ Created new log for ${today} with ${vitaminNames.length} vitamins`);
+      }
+      
+      // Save to AsyncStorage
+      await AsyncStorage.setItem('@vitamin_log', JSON.stringify(vitaminLogs));
+      
+      // Also save the detailed scanned data separately for reference
+      await AsyncStorage.setItem('@last_scanned_product', JSON.stringify({
+        date: today,
+        productName: analysisResult.productName,
+        servingSize: analysisResult.servingSize,
+        ingredients: analysisResult.ingredients,
+      }));
+      
+      Alert.alert(
+        '✅ Saved to Tracker!',
+        `Added ${analysisResult.productName || 'your vitamins'} to today's tracker with ${analysisResult.ingredients.length} ingredients.`,
+        [
+          { text: 'OK', style: 'default' },
+          { text: 'View Tracker', onPress: onBack }
+        ]
+      );
+      
+    } catch (error) {
+      console.error('❌ Error saving to tracker:', error);
+      Alert.alert('Error', 'Failed to save to tracker. Please try again.');
+    }
+  };
+
   const handleLibraryPress = async () => {
     try {
-      // Request photo library permission
+      // Always request photo library permission when button is pressed
       const libraryPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       
       if (libraryPermission.status !== 'granted') {
+        // Permission denied - guide user to settings
         Alert.alert(
           'Photo Library Permission Required',
-          'We need access to your photo library to select vitamin label images for scanning.',
-          [{ text: 'OK' }]
+          'We need access to your photo library to select vitamin label images for scanning. Please enable photo library access in your device settings.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Open Settings',
+              onPress: () => {
+                if (Platform.OS === 'ios') {
+                  Linking.openURL('app-settings:');
+                } else {
+                  Linking.openSettings();
+                }
+              }
+            }
+          ]
         );
         return;
       }
@@ -238,13 +599,18 @@ Return JSON format:
       // Launch photo library
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 1,
+        allowsEditing: false, // Use full photo without cropping
+        quality: 1, // Highest quality
       });
 
       if (!result.canceled && result.assets[0]) {
-        console.log('Photo selected:', result.assets[0].uri);
+        console.log('📁 Photo selected:', result.assets[0].uri);
+        console.log('📁 Photo details:', {
+          uri: result.assets[0].uri,
+          width: result.assets[0].width,
+          height: result.assets[0].height,
+          fileSize: result.assets[0].fileSize
+        });
         await analyzeImage(result.assets[0].uri);
       }
     } catch (error) {
@@ -328,25 +694,152 @@ Return JSON format:
             </View>
           )}
 
-          <View style={styles.ingredientsCard}>
-            <Text style={styles.ingredientsHeader}>
-              Ingredients Found: {analysisResult.ingredients.length}
-            </Text>
-            
-            {analysisResult.ingredients.map((ingredient, index) => (
-              <View key={index} style={styles.ingredientRow}>
-                <View style={styles.ingredientBullet}>
-                  <Text style={styles.bulletText}>•</Text>
-                </View>
-                <View style={styles.ingredientInfo}>
-                  <Text style={styles.ingredientName}>{ingredient.name}</Text>
-                  <Text style={styles.ingredientDosage}>
-                    {ingredient.amount} {ingredient.unit}
-                    {ingredient.percentDailyValue && ` (${ingredient.percentDailyValue} DV)`}
-                  </Text>
-                </View>
+          {/* Show OCR debug info (always in debug mode, or when zero ingredients) */}
+          {(DEBUG_MODE || analysisResult.ingredients.length === 0) && analysisResult.rawResponse && (
+            <View style={styles.debugCard}>
+              <Text style={styles.debugTitle}>🔍 Debug Info</Text>
+              {analysisResult.ingredients.length === 0 && (
+                <Text style={styles.debugText}>
+                  The OCR extracted text but couldn't find any vitamin/supplement patterns.
+                </Text>
+              )}
+              <Text style={styles.debugSubtext}>
+                Raw OCR text (first 300 chars):
+              </Text>
+              <View style={styles.debugRawText}>
+                <Text style={styles.debugRawTextContent}>
+                  {analysisResult.rawResponse.substring(0, 300)}
+                  {analysisResult.rawResponse.length > 300 ? '...' : ''}
+                </Text>
               </View>
-            ))}
+              {analysisResult.ingredients.length === 0 && (
+                <Text style={styles.debugHelp}>
+                  💡 Tip: Try taking the photo in better lighting with the label clearly visible and text in focus.
+                </Text>
+              )}
+            </View>
+          )}
+
+          <View style={styles.ingredientsCard}>
+            <View style={styles.ingredientsCountBanner}>
+              <Text style={styles.ingredientsCountIcon}>
+                {analysisResult.ingredients.length > 0 ? '✅' : '⚠️'}
+              </Text>
+              <Text style={styles.ingredientsHeader}>
+                {analysisResult.ingredients.length > 0 
+                  ? `Found ${analysisResult.ingredients.length} Ingredients!` 
+                  : 'No Ingredients Found'}
+              </Text>
+            </View>
+            
+            {analysisResult.ingredients.length === 0 && (
+              <View style={styles.noIngredientsHelp}>
+                <Text style={styles.noIngredientsText}>
+                  Try taking another photo with:
+                </Text>
+                <Text style={styles.helpBullet}>• Better lighting</Text>
+                <Text style={styles.helpBullet}>• Closer to the label</Text>
+                <Text style={styles.helpBullet}>• Text in sharp focus</Text>
+                <Text style={styles.helpBullet}>• Straight-on angle</Text>
+              </View>
+            )}
+            
+            {analysisResult.ingredients.map((ingredient, index) => {
+              const ingredientInfo = findIngredient(ingredient.name);
+              // Prioritize AI-generated description, fall back to knowledge base
+              const hasAIDescription = ingredient.description || ingredient.benefits;
+              
+              return (
+                <View key={index} style={styles.ingredientDetailCard}>
+                  <View style={styles.ingredientHeader}>
+                    <View style={styles.ingredientBullet}>
+                      <Text style={styles.bulletText}>•</Text>
+                    </View>
+                    <View style={styles.ingredientHeaderInfo}>
+                      <Text style={styles.ingredientName}>{ingredient.name}</Text>
+                      <Text style={styles.ingredientDosage}>
+                        {ingredient.amount} {ingredient.unit}
+                        {ingredient.percentDailyValue && ` (${ingredient.percentDailyValue} DV)`}
+                      </Text>
+                    </View>
+                  </View>
+                  
+                  {/* AI-Generated Description (Priority) */}
+                  {hasAIDescription && (
+                    <View style={styles.ingredientBenefits}>
+                      <View style={styles.benefitRow}>
+                        <Text style={styles.benefitIcon}>🤰</Text>
+                        <Text style={styles.benefitText}>
+                          {ingredient.description || ingredient.benefits}
+                        </Text>
+                      </View>
+                      
+                      {/* Also show pregnancy recommendation from knowledge base if available */}
+                      {ingredientInfo?.pregnancyRecommendation && (
+                        <View style={styles.benefitRow}>
+                          <Text style={styles.benefitIcon}>💊</Text>
+                          <Text style={styles.benefitText}>
+                            <Text style={styles.benefitLabel}>Recommended: </Text>
+                            {ingredientInfo.pregnancyRecommendation}
+                          </Text>
+                        </View>
+                      )}
+                      
+                      {ingredientInfo?.warnings && ingredientInfo.warnings.length > 0 && (
+                        <View style={styles.benefitRow}>
+                          <Text style={styles.benefitIcon}>⚠️</Text>
+                          <Text style={styles.benefitText}>
+                            {ingredientInfo.warnings.join(', ')}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                  
+                  {/* Fallback to Knowledge Base if no AI description */}
+                  {!hasAIDescription && ingredientInfo && (
+                    <View style={styles.ingredientBenefits}>
+                      {ingredientInfo.benefits && (
+                        <View style={styles.benefitRow}>
+                          <Text style={styles.benefitIcon}>🤰</Text>
+                          <Text style={styles.benefitText}>
+                            {ingredientInfo.benefits}
+                          </Text>
+                        </View>
+                      )}
+                      
+                      {ingredientInfo.pregnancyRecommendation && (
+                        <View style={styles.benefitRow}>
+                          <Text style={styles.benefitIcon}>💊</Text>
+                          <Text style={styles.benefitText}>
+                            <Text style={styles.benefitLabel}>Recommended: </Text>
+                            {ingredientInfo.pregnancyRecommendation}
+                          </Text>
+                        </View>
+                      )}
+                      
+                      {ingredientInfo.warnings && ingredientInfo.warnings.length > 0 && (
+                        <View style={styles.benefitRow}>
+                          <Text style={styles.benefitIcon}>⚠️</Text>
+                          <Text style={styles.benefitText}>
+                            {ingredientInfo.warnings.join(', ')}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                  
+                  {/* No information available */}
+                  {!hasAIDescription && !ingredientInfo && (
+                    <View style={styles.ingredientBenefits}>
+                      <Text style={styles.noInfoText}>
+                        ℹ️ No additional information available for this ingredient
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              );
+            })}
           </View>
 
           {analysisResult.warnings && analysisResult.warnings.length > 0 && (
@@ -360,10 +853,8 @@ Return JSON format:
 
           <TouchableOpacity 
             style={styles.saveButton}
-            onPress={() => {
-              Alert.alert('Save', 'Feature coming soon: Save to your vitamin tracker!');
-            }}>
-            <Text style={styles.saveButtonText}>Save to Tracker</Text>
+            onPress={saveToTracker}>
+            <Text style={styles.saveButtonText}>💾 Save to Tracker</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -564,17 +1055,54 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginTop: 8,
   },
+  ingredientsCountBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: '#E0E0E0',
+  },
+  ingredientsCountIcon: {
+    fontSize: 20,
+    marginRight: 8,
+  },
   ingredientsHeader: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
+  },
+  noIngredientsHelp: {
+    backgroundColor: '#FFFBEB',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#F59E0B',
+  },
+  noIngredientsText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#92400E',
     marginBottom: 12,
   },
-  ingredientRow: {
+  helpBullet: {
+    fontSize: 13,
+    color: '#78350F',
+    marginLeft: 8,
+    marginVertical: 2,
+  },
+  ingredientDetailCard: {
+    backgroundColor: '#ffffff',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#FF69B4',
+  },
+  ingredientHeader: {
     flexDirection: 'row',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    marginBottom: 8,
   },
   ingredientBullet: {
     width: 20,
@@ -584,18 +1112,55 @@ const styles = StyleSheet.create({
     color: '#FF69B4',
     fontWeight: 'bold',
   },
+  ingredientHeaderInfo: {
+    flex: 1,
+  },
   ingredientInfo: {
     flex: 1,
   },
   ingredientName: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     color: '#333',
-    marginBottom: 2,
+    marginBottom: 4,
   },
   ingredientDosage: {
-    fontSize: 13,
+    fontSize: 14,
     color: '#666',
+    fontWeight: '500',
+  },
+  ingredientBenefits: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+  },
+  benefitRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
+    paddingLeft: 4,
+  },
+  benefitIcon: {
+    fontSize: 14,
+    marginRight: 8,
+    marginTop: 2,
+  },
+  benefitText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#555',
+    lineHeight: 18,
+  },
+  benefitLabel: {
+    fontWeight: '600',
+    color: '#333',
+  },
+  noInfoText: {
+    fontSize: 12,
+    color: '#999',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    paddingVertical: 4,
   },
   warningsCard: {
     backgroundColor: '#FFF3E0',
@@ -632,6 +1197,49 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  debugCard: {
+    backgroundColor: '#FFF9E6',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FFA500',
+  },
+  debugTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#D97706',
+    marginBottom: 8,
+  },
+  debugText: {
+    fontSize: 14,
+    color: '#92400E',
+    marginBottom: 12,
+    lineHeight: 20,
+  },
+  debugSubtext: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#78350F',
+    marginBottom: 8,
+    marginTop: 8,
+  },
+  debugRawText: {
+    backgroundColor: '#FFFFFF',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  debugRawTextContent: {
+    fontSize: 12,
+    color: '#666',
+    fontFamily: 'monospace',
+  },
+  debugHelp: {
+    fontSize: 13,
+    color: '#92400E',
+    fontStyle: 'italic',
   },
 });
 

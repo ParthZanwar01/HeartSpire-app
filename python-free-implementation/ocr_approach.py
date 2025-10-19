@@ -77,19 +77,44 @@ class OCRIngredientExtractor:
     def extract_text(self, image_path: str) -> str:
         """Extract text from image using OCR"""
         try:
+            from PIL import ImageEnhance, ImageFilter
+            
             image = Image.open(image_path)
             
             # Preprocess image for better OCR
+            # Convert to RGB first (in case it's not)
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            
+            # Resize if too small (OCR works better on larger images)
+            width, height = image.size
+            if width < 1000 or height < 1000:
+                scale = max(1000 / width, 1000 / height)
+                new_size = (int(width * scale), int(height * scale))
+                image = image.resize(new_size, Image.Resampling.LANCZOS)
+            
             # Convert to grayscale
             image = image.convert('L')
             
-            # Extract text
-            text = pytesseract.image_to_string(image)
+            # Enhance contrast
+            enhancer = ImageEnhance.Contrast(image)
+            image = enhancer.enhance(2.0)
+            
+            # Sharpen
+            image = image.filter(ImageFilter.SHARPEN)
+            
+            # Extract text with better config
+            custom_config = r'--oem 3 --psm 6'
+            text = pytesseract.image_to_string(image, config=custom_config)
+            
+            print(f"📝 Extracted {len(text)} characters of text")
             
             return text.lower()
         
         except Exception as e:
             print(f"Error extracting text: {e}")
+            import traceback
+            traceback.print_exc()
             return ""
     
     def parse_ingredients(self, text: str) -> List[Dict]:

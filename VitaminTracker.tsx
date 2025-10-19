@@ -12,9 +12,54 @@ import {
   Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {Colors} from 'react-native/Libraries/NewAppScreen';
-import notifee, {TimestampTrigger, TriggerType, AndroidImportance} from '@notifee/react-native';
-import {request, PERMISSIONS, RESULTS} from 'react-native-permissions';
+// import {Colors} from 'react-native/Libraries/NewAppScreen';
+// import notifee, {TimestampTrigger, TriggerType, AndroidImportance} from '@notifee/react-native';
+// import {request, PERMISSIONS, RESULTS} from 'react-native-permissions';
+
+// NOTE: This file is not currently used. The app uses ModernVitaminTracker.tsx instead.
+// These imports are commented out because the packages are not installed.
+// Adding stub definitions to avoid TypeScript errors:
+
+const Colors = {
+  white: '#FFFFFF',
+  black: '#000000',
+  light: '#999999',
+  dark: '#333333',
+  darker: '#111111',
+  lighter: '#F8F8F8',
+};
+
+const notifee = {
+  createChannel: async (_config: any) => {},
+  cancelAllNotifications: async () => {},
+  createTriggerNotification: async (_notification: any, _trigger: any) => {},
+};
+
+const AndroidImportance = {
+  DEFAULT: 'default',
+  HIGH: 'high',
+};
+
+const TriggerType = {
+  TIMESTAMP: 0,
+};
+
+type TimestampTrigger = {
+  type: number;
+  timestamp: number;
+  repeatFrequency?: string;
+};
+
+const PERMISSIONS = {
+  IOS: { NOTIFICATIONS: 'ios.permission.NOTIFICATIONS' },
+  ANDROID: { POST_NOTIFICATIONS: 'android.permission.POST_NOTIFICATIONS' },
+};
+
+const RESULTS = {
+  GRANTED: 'granted',
+};
+
+const request = async (_permission: string) => RESULTS.GRANTED;
 
 interface Vitamin {
   id: string;

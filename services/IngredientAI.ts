@@ -8,6 +8,8 @@ export interface IdentifiedIngredient {
   amount?: string;
   unit?: string;
   percentDailyValue?: string;
+  description?: string; // AI-generated description of what this ingredient does
+  benefits?: string; // Benefits for pregnancy
 }
 
 export interface AnalysisResult {
