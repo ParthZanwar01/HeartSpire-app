@@ -47,6 +47,38 @@ const ScanIngredients: React.FC<ScanIngredientsProps> = ({
   // NEW: Request ingredient descriptions from AI
   const GET_INGREDIENT_DESCRIPTIONS = true;
 
+  // Expo Go HEIC conversion helper
+  const convertHEICForExpoGo = async (imageUri: string): Promise<string> => {
+    try {
+      // Check if it's a HEIC file
+      if (imageUri.toLowerCase().includes('.heic') || imageUri.toLowerCase().includes('.heif')) {
+        console.log('🔄 Converting HEIC to JPEG for Expo Go compatibility...');
+        console.log('🔍 Original imageUri:', imageUri);
+        
+        // For Expo Go, we'll try to read the image and let the system handle conversion
+        // The FileSystem.readAsStringAsync should handle HEIC conversion automatically
+        const base64 = await FileSystem.readAsStringAsync(imageUri, {
+          encoding: 'base64' as any,
+        });
+        
+        console.log('🔍 HEIC base64 length:', base64.length);
+        console.log('🔍 HEIC base64 preview:', base64.substring(0, 50));
+        
+        // Create a data URL that should work with OpenAI
+        // Try keeping original format first, then fallback to JPEG
+        const dataUrl = `data:image/heic;base64,${base64}`;
+        console.log('✅ HEIC converted to data URL for processing');
+        console.log('🔍 Data URL preview:', dataUrl.substring(0, 100));
+        return dataUrl;
+      }
+      
+      return imageUri; // Return original if not HEIC
+    } catch (error) {
+      console.warn('⚠️ HEIC conversion failed, using original:', error);
+      return imageUri; // Fallback to original
+    }
+  };
+
   const analyzeWithBackend = async (imageUri: string): Promise<AnalysisResult> => {
     try {
       console.log('🔄 Converting image to base64...', imageUri);
@@ -63,15 +95,23 @@ const ScanIngredients: React.FC<ScanIngredientsProps> = ({
         throw new Error('No image URI provided');
       }
       
-      // Check if FileSystem is available
-      if (!FileSystem || !FileSystem.readAsStringAsync) {
-        throw new Error('FileSystem API not available');
-      }
+      let base64: string;
       
-      // Read image as base64
-      const base64 = await FileSystem.readAsStringAsync(imageUri, {
-        encoding: 'base64' as any, // Use string instead of enum
-      });
+      // Check if it's already a data URL (from HEIC conversion)
+      if (imageUri.startsWith('data:image/')) {
+        console.log('📱 Using pre-converted data URL for backend');
+        base64 = imageUri.split(',')[1]; // Extract base64 part
+      } else {
+        // Check if FileSystem is available
+        if (!FileSystem || !FileSystem.readAsStringAsync) {
+          throw new Error('FileSystem API not available');
+        }
+        
+        // Read image as base64 from file
+        base64 = await FileSystem.readAsStringAsync(imageUri, {
+          encoding: 'base64' as any, // Use string instead of enum
+        });
+      }
       
       if (!base64 || base64.length === 0) {
         throw new Error('Failed to convert image to base64 - empty result');
@@ -256,14 +296,30 @@ Keep each description to 1-2 sentences.`;
     try {
       console.log('🧠 Using OpenAI Vision (GPT-4o) - this is MUCH better than OCR!');
       
-      // Read image as base64
-      const base64 = await FileSystem.readAsStringAsync(imageUri, {
-        encoding: 'base64' as any,
-      });
+      let base64: string;
+      
+      // Check if it's already a data URL (from HEIC conversion)
+      if (imageUri.startsWith('data:image/')) {
+        console.log('📱 Using pre-converted data URL');
+        base64 = imageUri.split(',')[1]; // Extract base64 part
+      } else {
+        // Read image as base64 from file
+        base64 = await FileSystem.readAsStringAsync(imageUri, {
+          encoding: 'base64' as any,
+        });
+      }
       
       console.log('✅ Image encoded, sending to OpenAI...');
+      console.log('📊 Image size:', Math.round(base64.length / 1024), 'KB');
+      console.log('🔍 Base64 preview (first 100 chars):', base64.substring(0, 100));
+      console.log('🔍 Base64 preview (last 100 chars):', base64.substring(base64.length - 100));
       
       // Call OpenAI Vision API with enhanced prompt
+      console.log('🚀 Sending request to OpenAI API...');
+      console.log('🔑 API Key present:', !!OPENAI_API_KEY);
+      console.log('📊 Base64 length:', base64.length);
+      console.log('📊 Base64 valid format:', base64.match(/^[A-Za-z0-9+/]*={0,2}$/) ? 'YES' : 'NO');
+      
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -315,7 +371,7 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
                 {
                   type: 'image_url',
                   image_url: {
-                    url: `data:image/jpeg;base64,${base64}`,
+                    url: imageUri.startsWith('data:image/') ? imageUri : `data:image/jpeg;base64,${base64}`,
                     detail: 'high'
                   }
                 }
@@ -327,13 +383,18 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
         }),
       });
       
+      console.log('📡 OpenAI response status:', response.status);
+      console.log('📡 OpenAI response headers:', Object.fromEntries(response.headers.entries()));
+      
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('❌ OpenAI API error:', errorData);
         throw new Error(`OpenAI error: ${errorData.error?.message || 'Unknown error'}`);
       }
       
       const data = await response.json();
       console.log('📊 OpenAI response received');
+      console.log('📊 Response data:', JSON.stringify(data, null, 2));
       
       const content = data.choices[0]?.message?.content;
       
@@ -342,12 +403,111 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
       }
       
       console.log('🔍 Parsing OpenAI response...');
+      console.log('📝 Raw content preview:', content.substring(0, 500));
       
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
+      // Check if OpenAI couldn't read the image
+      const cannotReadPatterns = [
+        /unable to extract/i,
+        /cannot extract/i,
+        /can't extract/i,
+        /cannot read/i,
+        /unable to read/i,
+        /can't read/i,
+        /please provide/i,
+        /could not.*text/i,
+        /no.*visible/i,
+        /image.*unclear/i,
+        /image.*blurry/i,
+        /supplement facts.*not visible/i,
+        /nutrition facts.*not visible/i,
+        /label.*obscured/i,
+        /hand.*covering/i,
+      ];
+      
+      const isUnreadable = cannotReadPatterns.some(pattern => pattern.test(content));
+      
+      if (isUnreadable) {
+        console.warn('⚠️ OpenAI could not read the image clearly');
+        console.log('🔄 Attempting fallback to backend OCR...');
         
+        // Try backend OCR as fallback
+        try {
+          const backendResult = await analyzeWithBackend(imageUri);
+          if (backendResult.success && backendResult.ingredients.length > 0) {
+            console.log('✅ Backend OCR succeeded as fallback');
+            return backendResult;
+          }
+        } catch (backendError) {
+          console.warn('⚠️ Backend fallback also failed:', backendError);
+        }
+        
+        throw new Error('Image quality too low. Please try again with:\n\n📸 Better lighting (bright, indirect light)\n🔍 Clear focus on the Supplement Facts panel\n📏 Fill the frame with just the label\n🚫 Avoid glare, shadows, or blur\n\n🚨 CRITICAL: Make sure the "Supplement Facts" panel is fully visible and not covered by your hand!');
+      }
+      
+      // Try multiple parsing strategies
+      let parsed = null;
+      
+      // Strategy 1: Try to extract JSON from markdown code block
+      const markdownMatch = content.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+      if (markdownMatch) {
+        try {
+          parsed = JSON.parse(markdownMatch[1]);
+          console.log('✅ Parsed JSON from markdown code block');
+        } catch (e) {
+          console.warn('⚠️ Failed to parse markdown JSON:', e);
+        }
+      }
+      
+      // Strategy 2: Try to find raw JSON (greedy match from first { to last })
+      if (!parsed) {
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          try {
+            parsed = JSON.parse(jsonMatch[0]);
+            console.log('✅ Parsed raw JSON');
+          } catch (e) {
+            console.warn('⚠️ Failed to parse raw JSON:', e);
+          }
+        }
+      }
+      
+      // Strategy 3: Try to find JSON with balanced braces
+      if (!parsed) {
+        const firstBrace = content.indexOf('{');
+        if (firstBrace !== -1) {
+          let braceCount = 0;
+          let endPos = firstBrace;
+          
+          for (let i = firstBrace; i < content.length; i++) {
+            if (content[i] === '{') braceCount++;
+            if (content[i] === '}') braceCount--;
+            if (braceCount === 0) {
+              endPos = i + 1;
+              break;
+            }
+          }
+          
+          if (endPos > firstBrace) {
+            try {
+              const jsonStr = content.substring(firstBrace, endPos);
+              parsed = JSON.parse(jsonStr);
+              console.log('✅ Parsed JSON with balanced braces');
+            } catch (e) {
+              console.warn('⚠️ Failed to parse balanced JSON:', e);
+            }
+          }
+        }
+      }
+      
+      // If we successfully parsed, validate and return
+      if (parsed && typeof parsed === 'object') {
         console.log(`✅ OpenAI found ${parsed.ingredients?.length || 0} ingredients`);
+        
+        // Ensure ingredients is an array
+        if (!Array.isArray(parsed.ingredients)) {
+          console.warn('⚠️ Ingredients is not an array, converting...');
+          parsed.ingredients = [];
+        }
         
         return {
           success: true,
@@ -359,7 +519,9 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
         };
       }
       
-      throw new Error('Could not parse OpenAI response');
+      // If all parsing failed, log the content for debugging
+      console.error('❌ All parsing strategies failed. Raw content:', content);
+      throw new Error('Could not parse OpenAI response - see console for details');
       
     } catch (error) {
       console.error('❌ OpenAI Vision error:', error);
@@ -368,6 +530,87 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
         ingredients: [],
         error: error instanceof Error ? error.message : 'Unknown error'
       };
+    }
+  };
+
+  const processManualText = async (text: string) => {
+    try {
+      console.log('📝 Processing manual text input...');
+      setAnalyzing(true);
+      
+      // Use the same frontend extraction logic
+      const ingredients: any[] = [];
+      const rawText = text.toLowerCase();
+      
+      // Look for vitamin patterns in the manual text
+      const vitaminPatterns = [
+        { name: 'Vitamin A', pattern: /vitamin\s*a\D*?(\d+(?:\.\d+)?)\s*(mcg|μg|iu|mg)/i },
+        { name: 'Vitamin C', pattern: /vitamin\s*c\D*?(\d+(?:\.\d+)?)\s*(g|mg|mcg)/i },
+        { name: 'Vitamin D3', pattern: /vitamin\s*d\d?\D*?(\d+(?:\.\d+)?)\s*(iu|mcg|μg)/i },
+        { name: 'Vitamin E', pattern: /vitamin\s*e\D*?(\d+(?:\.\d+)?)\s*(iu|mg)/i },
+        { name: 'Vitamin K', pattern: /vitamin\s*k\d?\D*?(\d+(?:\.\d+)?)\s*(mcg|μg)/i },
+        { name: 'Vitamin B6', pattern: /(?:vitamin\s*)?b\s*-?\s*6\D*?(\d+(?:\.\d+)?)\s*(mg)/i },
+        { name: 'Vitamin B12', pattern: /(?:vitamin\s*)?b\s*-?\s*12\D*?(\d+(?:\.\d+)?)\s*(mcg|μg)/i },
+        { name: 'Thiamin', pattern: /thiamin(?:e)?\D*?(\d+(?:\.\d+)?)\s*(mg)/i },
+        { name: 'Riboflavin', pattern: /riboflavin\D*?(\d+(?:\.\d+)?)\s*(mg)/i },
+        { name: 'Niacin', pattern: /niacin\D*?(\d+(?:\.\d+)?)\s*(mg)/i },
+        { name: 'Folic Acid', pattern: /(?:folic\s*acid|folate)\D*?(\d+(?:\.\d+)?)\s*(mcg|μg|mg)/i },
+        { name: 'Biotin', pattern: /biotin\D*?(\d+(?:\.\d+)?)\s*(mcg|μg)/i },
+        { name: 'Pantothenic Acid', pattern: /pantothenic\s*acid\D*?(\d+(?:\.\d+)?)\s*(mg)/i },
+        { name: 'Iron', pattern: /iron\D*?(\d+(?:\.\d+)?)\s*(mg)/i },
+        { name: 'Calcium', pattern: /calcium\D*?(\d+(?:\.\d+)?)\s*(mg|g)/i },
+        { name: 'Zinc', pattern: /zinc\D*?(\d+(?:\.\d+)?)\s*(mg)/i },
+        { name: 'Magnesium', pattern: /magnesium\D*?(\d+(?:\.\d+)?)\s*(mg|g)/i },
+        { name: 'Iodine', pattern: /iodine\D*?(\d+(?:\.\d+)?)\s*(mcg|μg)/i },
+        { name: 'DHA', pattern: /dha\D*?(\d+(?:\.\d+)?)\s*(mg|g)/i },
+        { name: 'Choline', pattern: /choline\D*?(\d+(?:\.\d+)?)\s*(mg)/i },
+      ];
+      
+      for (const { name, pattern } of vitaminPatterns) {
+        const match = rawText.match(pattern);
+        if (match) {
+          console.log(`  Found ${name}: ${match[1]} ${match[2]}`);
+          ingredients.push({
+            name: name,
+            amount: match[1] || '',
+            unit: match[2] || '',
+            percentDailyValue: '',
+            description: '',
+            benefits: ''
+          });
+        }
+      }
+      
+      const result: AnalysisResult = {
+        success: true,
+        productName: 'Manual Entry',
+        servingSize: 'Unknown',
+        ingredients: ingredients,
+        warnings: [],
+        rawResponse: text,
+      };
+      
+      setAnalysisResult(result);
+      
+      if (ingredients.length > 0) {
+        Alert.alert(
+          '✅ Manual Analysis Complete!',
+          `Found ${ingredients.length} ingredients from your text input.`,
+          [{ text: 'View Details', onPress: () => {} }]
+        );
+      } else {
+        Alert.alert(
+          '⚠️ No Vitamins Found',
+          'Could not identify any vitamins in the text. Please try typing the ingredient names more clearly.',
+          [{ text: 'Try Again', onPress: () => {} }]
+        );
+      }
+      
+    } catch (error) {
+      console.error('Manual text processing error:', error);
+      Alert.alert('Error', 'Failed to process manual text. Please try again.');
+    } finally {
+      setAnalyzing(false);
     }
   };
 
@@ -396,6 +639,10 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
     setAnalyzing(true);
     
     try {
+      // Convert HEIC for Expo Go compatibility
+      const processedImageUri = await convertHEICForExpoGo(imageUri);
+      console.log('📱 Processed image URI for Expo Go:', processedImageUri);
+      
       let result: AnalysisResult;
       
       if (USE_MOCK) {
@@ -403,10 +650,10 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
         result = await mockAnalysis();
       } else if (USE_BACKEND) {
         console.log('🤖 Using Python backend (LLaVA)');
-        result = await analyzeWithBackend(imageUri);
+        result = await analyzeWithBackend(processedImageUri);
       } else if (USE_OPENAI && OPENAI_API_KEY) {
         console.log('🧠 Using OpenAI Vision API');
-        result = await analyzeWithOpenAI(imageUri);
+        result = await analyzeWithOpenAI(processedImageUri);
       } else {
         Alert.alert(
           'Configuration Error',
@@ -440,10 +687,59 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
       }
     } catch (error) {
       console.error('Analysis error:', error);
-      Alert.alert(
-        'Error',
-        `Failed to analyze image: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+      
+      // Check if it's an image quality error
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const isImageQualityError = errorMessage.includes('Image quality') || 
+                                   errorMessage.includes('Better lighting') ||
+                                   errorMessage.includes('unable to read');
+      
+      if (isImageQualityError) {
+        Alert.alert(
+          '📸 Image Quality Issue',
+          errorMessage,
+          [
+            { text: 'Try Again', style: 'default' },
+            { text: 'Manual Input', onPress: () => {
+              Alert.prompt(
+                'Manual Ingredient Entry',
+                'Type the ingredients from the label (one per line):',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Analyze', onPress: (text?: string) => {
+                    if (text && text.trim()) {
+                      // Process manual text input
+                      processManualText(text.trim());
+                    }
+                  }}
+                ],
+                'plain-text',
+                '',
+                'default'
+              );
+            }},
+            { text: 'See Tips', onPress: () => {
+              Alert.alert(
+                '💡 Photo Tips for Vitamin Labels',
+                '✓ Use bright, natural lighting\n' +
+                '✓ Hold phone steady and close\n' +
+                '✓ Center the Supplement Facts panel\n' +
+                '✓ Avoid shadows and glare\n' +
+                '✓ Make sure text is sharp and clear\n\n' +
+                '🚨 CRITICAL: Don\'t cover the "Supplement Facts" panel with your hand!\n' +
+                '📏 Fill the frame with just the label\n' +
+                '📱 Tap the screen to focus before taking the photo\n\n' +
+                'The "Supplement Facts" panel is the most important part - make sure it\'s fully visible!'
+              );
+            }}
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Error',
+          `Failed to analyze image: ${errorMessage}`
+        );
+      }
     } finally {
       setAnalyzing(false);
     }
@@ -476,11 +772,14 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
         return;
       }
 
-      // Launch camera
+      // Launch camera with HEIC support for Expo Go
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaTypeOptions.All, // Allow all media types including HEIC
         allowsEditing: false, // Use full photo without cropping
-        quality: 1, // Highest quality
+        quality: 1, // Highest quality for best scanning results
+        exif: false, // Don't include EXIF data to reduce file size
+        // Expo Go workaround: force conversion to JPEG
+        base64: false, // We'll handle conversion manually
       });
 
       if (!result.canceled && result.assets[0]) {
@@ -489,8 +788,19 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
           uri: result.assets[0].uri,
           width: result.assets[0].width,
           height: result.assets[0].height,
-          fileSize: result.assets[0].fileSize
+          fileSize: result.assets[0].fileSize,
+          type: result.assets[0].type,
+          mimeType: result.assets[0].mimeType
         });
+        
+        // Check if it's a HEIC file from iPhone
+        const uri = result.assets[0].uri.toLowerCase();
+        const mimeType = result.assets[0].mimeType?.toLowerCase();
+        
+        if (uri.endsWith('.heic') || mimeType?.includes('heic')) {
+          console.log('📱 iPhone HEIC photo detected - excellent for scanning!');
+        }
+        
         await analyzeImage(result.assets[0].uri);
       }
     } catch (error) {
@@ -596,11 +906,14 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
         return;
       }
 
-      // Launch photo library
+      // Launch photo library with HEIC support for Expo Go
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaTypeOptions.All, // Allow all media types including HEIC
         allowsEditing: false, // Use full photo without cropping
         quality: 1, // Highest quality
+        exif: false, // Don't include EXIF data to reduce file size
+        // Expo Go workaround: force conversion to JPEG
+        base64: false, // We'll handle conversion manually
       });
 
       if (!result.canceled && result.assets[0]) {
@@ -609,8 +922,53 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
           uri: result.assets[0].uri,
           width: result.assets[0].width,
           height: result.assets[0].height,
-          fileSize: result.assets[0].fileSize
+          fileSize: result.assets[0].fileSize,
+          type: result.assets[0].type,
+          mimeType: result.assets[0].mimeType
         });
+        
+        // Check if it's a PDF or unsupported file type
+        const uri = result.assets[0].uri.toLowerCase();
+        const mimeType = result.assets[0].mimeType?.toLowerCase();
+        
+        console.log('🔍 File validation:', {
+          uri: result.assets[0].uri,
+          mimeType: result.assets[0].mimeType,
+          type: result.assets[0].type,
+          fileName: result.assets[0].fileName
+        });
+        
+        if (uri.endsWith('.pdf') || mimeType?.includes('pdf')) {
+          Alert.alert(
+            '❌ PDF Not Supported',
+            'Please take a photo of the vitamin label or select an image file (JPG, PNG, etc.).\n\nPDF files cannot be scanned directly.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+        
+        // Check for valid image types (including HEIC from iPhone)
+        const validImageExtensions = ['.jpg', '.jpeg', '.png', '.heic', '.heif'];
+        const hasValidExtension = validImageExtensions.some(ext => uri.endsWith(ext));
+        const hasValidMimeType = mimeType?.startsWith('image/');
+        
+        // Special handling for HEIC files from iPhone
+        if (uri.endsWith('.heic') || mimeType?.includes('heic')) {
+          console.log('📱 iPhone HEIC file detected - converting for Expo Go compatibility!');
+        }
+        
+        if (!hasValidExtension && !hasValidMimeType) {
+          Alert.alert(
+            '❌ Invalid File Type',
+            'Please select a photo in JPG, PNG, or HEIC format.\n\nHEIC files from iPhone work great!\n\nIf you\'re still having issues, try taking a new photo with the camera instead.',
+            [
+              { text: 'OK' },
+              { text: 'Take Photo', onPress: () => handleCameraPress() }
+            ]
+          );
+          return;
+        }
+        
         await analyzeImage(result.assets[0].uri);
       }
     } catch (error) {

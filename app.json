@@ -21,8 +21,17 @@
         "NSUserNotificationsUsageDescription": "We need notification access to remind you to take your daily vitamins.",
         "NSCameraUsageDescription": "We need camera access to scan supplement labels for analysis.",
         "NSPhotoLibraryUsageDescription": "We need photo library access to pick supplement label images.",
-        "ITSAppUsesNonExemptEncryption": false
-      }
+        "ITSAppUsesNonExemptEncryption": false,
+        "UISupportedInterfaceOrientations": ["UIInterfaceOrientationPortrait"],
+        "CFBundleDocumentTypes": [
+          {
+            "CFBundleTypeName": "HEIC Image",
+            "CFBundleTypeRole": "Viewer",
+            "LSItemContentTypes": ["public.heic"]
+          }
+        ]
+      },
+      "appleTeamId": "QB736BJ6TF"
     },
     "android": {
       "adaptiveIcon": {
@@ -37,6 +46,20 @@
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.VIBRATE",
         "android.permission.RECORD_AUDIO"
+      ],
+      "intentFilters": [
+        {
+          "action": "android.intent.action.VIEW",
+          "data": [
+            {
+              "mimeType": "image/heic"
+            },
+            {
+              "mimeType": "image/heif"
+            }
+          ],
+          "category": ["android.intent.category.DEFAULT"]
+        }
       ]
     },
     "web": {
@@ -55,7 +78,8 @@
         "expo-image-picker",
         {
           "photosPermission": "We need photo library access to pick supplement label images.",
-          "cameraPermission": "We need camera access to scan supplement labels for analysis."
+          "cameraPermission": "We need camera access to scan supplement labels for analysis.",
+          "supportsHEIC": true
         }
       ]
     ],

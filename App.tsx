@@ -38,10 +38,11 @@ function App(): React.JSX.Element {
       }
 
       const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaTypeOptions.All, // Support HEIC files
         allowsEditing: true,
         aspect: [4, 3],
         quality: 1,
+        exif: false, // Reduce file size
       });
       
       if (!res.canceled && res.assets[0]) {
