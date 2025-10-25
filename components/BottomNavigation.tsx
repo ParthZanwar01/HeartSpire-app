@@ -2,8 +2,8 @@ import React from 'react';
 import {View, Text, TouchableOpacity, StyleSheet} from 'react-native';
 
 interface BottomNavigationProps {
-  activeTab: 'home' | 'scan' | 'tracker';
-  onTabChange: (tab: 'home' | 'scan' | 'tracker') => void;
+  activeTab: 'home' | 'scan' | 'tracker' | 'info';
+  onTabChange: (tab: 'home' | 'scan' | 'tracker' | 'info') => void;
 }
 
 const BottomNavigation: React.FC<BottomNavigationProps> = ({
@@ -38,6 +38,15 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
           {activeTab === 'tracker' && <View style={styles.badge} />}
         </View>
         <Text style={[styles.label, activeTab === 'tracker' && styles.activeLabel]}>Tracker</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.tab}
+        onPress={() => onTabChange('info')}>
+        <View style={[styles.iconContainer, activeTab === 'info' && styles.activeIconContainer]}>
+          <Text style={[styles.icon, activeTab === 'info' && styles.activeIcon]}>ℹ️</Text>
+        </View>
+        <Text style={[styles.label, activeTab === 'info' && styles.activeLabel]}>Info</Text>
       </TouchableOpacity>
     </View>
   );

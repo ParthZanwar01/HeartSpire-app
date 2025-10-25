@@ -12,15 +12,19 @@ import * as ImagePicker from 'expo-image-picker';
 interface HomeScreenProps {
   onScanPress: () => void;
   onTrackerPress: () => void;
+  onInfoPress: () => void;
   onSettingsPress: () => void;
   userName?: string;
+  userTrimester?: 'first' | 'second' | 'third' | 'not_pregnant';
 }
 
 const HomeScreen: React.FC<HomeScreenProps> = ({
   onScanPress,
   onTrackerPress,
+  onInfoPress,
   onSettingsPress,
   userName = 'Sarah',
+  userTrimester = 'not_pregnant',
 }) => {
   const testPermissions = async () => {
     try {
@@ -44,15 +48,37 @@ const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.logo}>VitaMom</Text>
-        <TouchableOpacity style={styles.settingsButton} onPress={testPermissions}>
-          <Text style={styles.settingsIcon}>🔧</Text>
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity style={styles.infoButton} onPress={onInfoPress}>
+            <Text style={styles.infoIcon}>ℹ️</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.settingsButton} onPress={onSettingsPress}>
+            <Text style={styles.settingsIcon}>🔧</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Welcome Section */}
       <View style={styles.welcomeSection}>
         <Text style={styles.welcomeText}>Welcome, {userName}</Text>
-        <Text style={styles.tagline}>Nurturing you and your baby, every day.</Text>
+        <Text style={styles.tagline}>
+          {userTrimester === 'not_pregnant' 
+            ? 'Supporting your health journey, every day.'
+            : `Nurturing you and your baby, every day.`
+          }
+        </Text>
+        {userTrimester !== 'not_pregnant' && (
+          <View style={styles.trimesterBadge}>
+            <Text style={styles.trimesterIcon}>
+              {userTrimester === 'first' ? '🌱' : 
+               userTrimester === 'second' ? '🌿' : '🌳'}
+            </Text>
+            <Text style={styles.trimesterText}>
+              {userTrimester === 'first' ? 'First Trimester' : 
+               userTrimester === 'second' ? 'Second Trimester' : 'Third Trimester'}
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* Main Action Card */}
@@ -101,6 +127,20 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#E91E63',
   },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  infoButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  infoIcon: {
+    fontSize: 20,
+  },
   settingsButton: {
     width: 40,
     height: 40,
@@ -125,6 +165,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FF69B4',
     textAlign: 'center',
+    marginBottom: 12,
+  },
+  trimesterBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF0F5',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  trimesterIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  trimesterText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#E91E63',
   },
   actionCard: {
     backgroundColor: '#FFE4E1',

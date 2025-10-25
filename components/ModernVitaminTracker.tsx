@@ -9,9 +9,11 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import CalendarView from './CalendarView';
+import { UserProfile } from '../services/supabase';
 
 interface ModernVitaminTrackerProps {
   onBack: () => void;
+  userProfile?: UserProfile | null;
 }
 
 interface VitaminLog {
@@ -27,7 +29,7 @@ interface VitaminLog {
   }>;
 }
 
-const ModernVitaminTracker: React.FC<ModernVitaminTrackerProps> = ({onBack}) => {
+const ModernVitaminTracker: React.FC<ModernVitaminTrackerProps> = ({onBack, userProfile}) => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [vitaminLogs, setVitaminLogs] = useState<VitaminLog[]>([]);
   const [recentIntake, setRecentIntake] = useState<VitaminLog[]>([]);

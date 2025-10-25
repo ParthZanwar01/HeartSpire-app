@@ -16,15 +16,18 @@ import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {AnalysisResult} from '../services/IngredientAI';
 import {findIngredient} from '../services/IngredientKnowledgeBase';
+import { UserProfile } from '../services/supabase';
 
 interface ScanIngredientsProps {
   onStartScanning: () => void;
   onBack: () => void;
+  userProfile?: UserProfile | null;
 }
 
 const ScanIngredients: React.FC<ScanIngredientsProps> = ({
   onStartScanning,
   onBack,
+  userProfile,
 }) => {
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
@@ -46,6 +49,55 @@ const ScanIngredients: React.FC<ScanIngredientsProps> = ({
   
   // NEW: Request ingredient descriptions from AI
   const GET_INGREDIENT_DESCRIPTIONS = true;
+
+  // Personalized analysis based on user profile
+  const getPersonalizedAnalysis = (ingredients: any[]) => {
+    if (!userProfile) return { recommendations: [], warnings: [], focus: [] };
+
+    const recommendations: string[] = [];
+    const warnings: string[] = [];
+    const focus: string[] = [];
+
+    // Check for allergies
+    if (userProfile.allergies && userProfile.allergies.length > 0) {
+      const foundAllergies = ingredients.filter(ing => 
+        userProfile.allergies.some(allergy => 
+          ing.name.toLowerCase().includes(allergy.toLowerCase())
+        )
+      );
+      
+      if (foundAllergies.length > 0) {
+        warnings.push(`⚠️ Contains allergens: ${foundAllergies.map(a => a.name).join(', ')}`);
+      }
+    }
+
+    // Check for trimester-specific recommendations
+    if (userProfile.trimester !== 'not_pregnant') {
+      const trimesterVitamins = {
+        first: ['Folic Acid', 'Iron', 'Vitamin D', 'B12'],
+        second: ['Iron', 'Vitamin D', 'Calcium', 'Omega-3'],
+        third: ['Iron', 'Vitamin D', 'Calcium', 'Vitamin K']
+      };
+
+      const recommendedForTrimester = trimesterVitamins[userProfile.trimester] || [];
+      const foundRecommended = ingredients.filter(ing => 
+        recommendedForTrimester.some(rec => 
+          ing.name.toLowerCase().includes(rec.toLowerCase())
+        )
+      );
+
+      if (foundRecommended.length > 0) {
+        recommendations.push(`✅ Great for ${userProfile.trimester} trimester: ${foundRecommended.map(f => f.name).join(', ')}`);
+      }
+    }
+
+    // Check focus areas
+    if (userProfile.focus_areas && userProfile.focus_areas.length > 0) {
+      focus.push(`🎯 Aligned with your focus: ${userProfile.focus_areas.join(', ')}`);
+    }
+
+    return { recommendations, warnings, focus };
+  };
 
   // Expo Go HEIC conversion helper
   const convertHEICForExpoGo = async (imageUri: string): Promise<string> => {
@@ -1038,6 +1090,34 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
         <View style={styles.resultsContainer}>
           <Text style={styles.resultsTitle}>📋 Analysis Results</Text>
           
+          {/* Personalized Analysis */}
+          {userProfile && (() => {
+            const personalized = getPersonalizedAnalysis(analysisResult.ingredients);
+            return (
+              <View style={styles.personalizedContainer}>
+                <Text style={styles.personalizedTitle}>🎯 Personalized for You</Text>
+                
+                {personalized.recommendations.map((rec, index) => (
+                  <View key={index} style={styles.personalizedCard}>
+                    <Text style={styles.personalizedText}>{rec}</Text>
+                  </View>
+                ))}
+                
+                {personalized.warnings.map((warning, index) => (
+                  <View key={index} style={styles.warningCard}>
+                    <Text style={styles.warningText}>{warning}</Text>
+                  </View>
+                ))}
+                
+                {personalized.focus.map((focus, index) => (
+                  <View key={index} style={styles.focusCard}>
+                    <Text style={styles.focusText}>{focus}</Text>
+                  </View>
+                ))}
+              </View>
+            );
+          })()}
+          
           {analysisResult.productName && (
             <View style={styles.resultCard}>
               <Text style={styles.resultLabel}>Product</Text>
@@ -1598,6 +1678,50 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#92400E',
     fontStyle: 'italic',
+  },
+  personalizedContainer: {
+    backgroundColor: '#F0F8FF',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4A90E2',
+  },
+  personalizedTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2E5BBA',
+    marginBottom: 12,
+  },
+  personalizedCard: {
+    backgroundColor: '#E8F4FD',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  personalizedText: {
+    fontSize: 14,
+    color: '#2E5BBA',
+    fontWeight: '500',
+  },
+  warningCard: {
+    backgroundColor: '#FFF3E0',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#FF9800',
+  },
+  focusCard: {
+    backgroundColor: '#F3E5F5',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  focusText: {
+    fontSize: 14,
+    color: '#7B1FA2',
+    fontWeight: '500',
   },
 });
 
