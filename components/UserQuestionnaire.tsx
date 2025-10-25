@@ -23,6 +23,10 @@ const UserQuestionnaire: React.FC<UserQuestionnaireProps> = ({
   const [currentStep, setCurrentStep] = useState(0);
   const [profile, setProfile] = useState<Partial<UserProfile>>({
     name: '',
+    age: '',
+    gender: '',
+    weight: '',
+    due_date: '',
     trimester: 'not_pregnant',
     allergies: [],
     focus_areas: [],
@@ -41,9 +45,24 @@ const UserQuestionnaire: React.FC<UserQuestionnaireProps> = ({
       content: 'name'
     },
     {
+      title: 'How old are you?',
+      subtitle: 'This helps us provide age-appropriate guidance',
+      content: 'age'
+    },
+    {
+      title: 'What\'s your current weight?',
+      subtitle: 'This helps us calculate appropriate vitamin dosages',
+      content: 'weight'
+    },
+    {
       title: 'Are you currently pregnant?',
-      subtitle: 'This helps us provide the right guidance',
+      subtitle: 'This helps us provide pregnancy-specific guidance',
       content: 'pregnancy'
+    },
+    {
+      title: 'What\'s your estimated due date?',
+      subtitle: 'This helps us calculate your exact trimester',
+      content: 'due_date'
     },
     {
       title: 'Which trimester are you in?',
@@ -98,6 +117,7 @@ const UserQuestionnaire: React.FC<UserQuestionnaireProps> = ({
     'Gluten-free'
   ];
 
+
   const handleNext = () => {
     if (currentStep < steps.length - 1) {
       setCurrentStep(currentStep + 1);
@@ -114,6 +134,19 @@ const UserQuestionnaire: React.FC<UserQuestionnaireProps> = ({
 
   const handleNameChange = (name: string) => {
     setProfile({ ...profile, name });
+  };
+
+  const handleAgeChange = (age: string) => {
+    setProfile({ ...profile, age });
+  };
+
+
+  const handleWeightChange = (weight: string) => {
+    setProfile({ ...profile, weight });
+  };
+
+  const handleDueDateChange = (due_date: string) => {
+    setProfile({ ...profile, due_date });
   };
 
   const handlePregnancyChange = (isPregnant: boolean) => {
@@ -181,6 +214,63 @@ const UserQuestionnaire: React.FC<UserQuestionnaireProps> = ({
               placeholder="Enter your name"
               placeholderTextColor="#999"
             />
+          </View>
+        );
+
+      case 'age':
+        return (
+          <View style={styles.stepContent}>
+            <Text style={styles.stepTitle}>{step.title}</Text>
+            <Text style={styles.stepSubtitle}>{step.subtitle}</Text>
+            <TextInput
+              style={styles.textInput}
+              value={profile.age}
+              onChangeText={handleAgeChange}
+              placeholder="Enter your age"
+              placeholderTextColor="#999"
+              keyboardType="numeric"
+            />
+            <Text style={styles.inputHelper}>
+              This helps us provide age-appropriate vitamin recommendations
+            </Text>
+          </View>
+        );
+
+
+      case 'weight':
+        return (
+          <View style={styles.stepContent}>
+            <Text style={styles.stepTitle}>{step.title}</Text>
+            <Text style={styles.stepSubtitle}>{step.subtitle}</Text>
+            <TextInput
+              style={styles.textInput}
+              value={profile.weight}
+              onChangeText={handleWeightChange}
+              placeholder="Enter your weight (lbs or kg)"
+              placeholderTextColor="#999"
+              keyboardType="numeric"
+            />
+            <Text style={styles.inputHelper}>
+              This helps us calculate appropriate vitamin dosages for your body
+            </Text>
+          </View>
+        );
+
+      case 'due_date':
+        return (
+          <View style={styles.stepContent}>
+            <Text style={styles.stepTitle}>{step.title}</Text>
+            <Text style={styles.stepSubtitle}>{step.subtitle}</Text>
+            <TextInput
+              style={styles.textInput}
+              value={profile.due_date}
+              onChangeText={handleDueDateChange}
+              placeholder="MM/DD/YYYY (e.g., 06/15/2024)"
+              placeholderTextColor="#999"
+            />
+            <Text style={styles.inputHelper}>
+              This helps us calculate your exact trimester and provide precise guidance
+            </Text>
           </View>
         );
 
@@ -347,8 +437,14 @@ const UserQuestionnaire: React.FC<UserQuestionnaireProps> = ({
     switch (steps[currentStep].content) {
       case 'name':
         return profile.name && profile.name.trim().length > 0;
+      case 'age':
+        return profile.age && profile.age.trim().length > 0 && !isNaN(Number(profile.age));
+      case 'weight':
+        return profile.weight && profile.weight.trim().length > 0 && !isNaN(Number(profile.weight));
       case 'pregnancy':
         return profile.trimester !== undefined;
+      case 'due_date':
+        return profile.due_date && profile.due_date.trim().length > 0;
       case 'trimester':
         return profile.trimester !== 'not_pregnant';
       default:
@@ -468,6 +564,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: '#ffffff',
     color: '#333',
+  },
+  inputHelper: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 20,
   },
   optionContainer: {
     width: '100%',

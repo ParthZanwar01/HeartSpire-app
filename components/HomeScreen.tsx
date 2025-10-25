@@ -13,18 +13,22 @@ interface HomeScreenProps {
   onScanPress: () => void;
   onTrackerPress: () => void;
   onInfoPress: () => void;
+  onProfilePress: () => void;
   onSettingsPress: () => void;
   userName?: string;
   userTrimester?: 'first' | 'second' | 'third' | 'not_pregnant';
+  isAuthenticated?: boolean;
 }
 
 const HomeScreen: React.FC<HomeScreenProps> = ({
   onScanPress,
   onTrackerPress,
   onInfoPress,
+  onProfilePress,
   onSettingsPress,
   userName = 'Sarah',
   userTrimester = 'not_pregnant',
+  isAuthenticated = false,
 }) => {
   const testPermissions = async () => {
     try {
@@ -52,6 +56,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({
           <TouchableOpacity style={styles.infoButton} onPress={onInfoPress}>
             <Text style={styles.infoIcon}>ℹ️</Text>
           </TouchableOpacity>
+          {isAuthenticated && (
+            <TouchableOpacity style={styles.profileButton} onPress={onProfilePress}>
+              <Text style={styles.profileIcon}>👤</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={styles.settingsButton} onPress={onSettingsPress}>
             <Text style={styles.settingsIcon}>🔧</Text>
           </TouchableOpacity>
@@ -139,6 +148,16 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   infoIcon: {
+    fontSize: 20,
+  },
+  profileButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  profileIcon: {
     fontSize: 20,
   },
   settingsButton: {

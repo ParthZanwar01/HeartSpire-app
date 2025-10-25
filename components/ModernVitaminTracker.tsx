@@ -128,6 +128,16 @@ const ModernVitaminTracker: React.FC<ModernVitaminTrackerProps> = ({onBack, user
         {/* Log for Today */}
         <View style={styles.logSection}>
           <Text style={styles.sectionTitle}>Log for Today</Text>
+          
+          {/* Reminder Status */}
+          {userProfile?.reminder_enabled && (
+            <View style={styles.reminderStatus}>
+              <Text style={styles.reminderStatusText}>
+                🔔 Daily reminders enabled at {userProfile.reminder_time}
+              </Text>
+            </View>
+          )}
+          
           <TouchableOpacity style={styles.markTakenButton} onPress={markAsTaken}>
             <View style={styles.checkmarkContainer}>
               <Text style={styles.checkmark}>✓</Text>
@@ -319,6 +329,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666666',
     lineHeight: 18,
+  },
+  reminderStatus: {
+    backgroundColor: '#F0F8FF',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4A90E2',
+  },
+  reminderStatusText: {
+    fontSize: 14,
+    color: '#2E5BBA',
+    fontWeight: '500',
   },
 });
 

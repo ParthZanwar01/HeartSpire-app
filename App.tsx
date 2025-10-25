@@ -20,38 +20,55 @@ import ScanIngredients from './components/ScanIngredients';
 import ModernVitaminTracker from './components/ModernVitaminTracker';
 import UserQuestionnaire from './components/UserQuestionnaire';
 import InformationScreen from './components/InformationScreen';
+import VitaminSearch from './components/VitaminSearch';
+import AuthScreen from './components/AuthScreen';
+import ProfileScreen from './components/ProfileScreen';
+import PregnancyToolsScreen from './components/PregnancyToolsScreen';
+import ReminderSettingsScreen from './components/ReminderSettingsScreen';
 import BottomNavigation from './components/BottomNavigation';
-import { UserProfile, userService } from './services/supabase';
+import { UserProfile, userService, authService } from './services/supabase';
 
 function App(): React.JSX.Element {
   const isDarkMode = useColorScheme() === 'dark';
-  const [currentTab, setCurrentTab] = useState<'home' | 'scan' | 'tracker' | 'info'>('home');
+  const [currentTab, setCurrentTab] = useState<'home' | 'scan' | 'tracker' | 'info' | 'search' | 'profile'>('home');
   const [showQuestionnaire, setShowQuestionnaire] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
+  const [showTools, setShowTools] = useState(false);
+  const [showReminderSettings, setShowReminderSettings] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   const backgroundStyle = {
     backgroundColor: isDarkMode ? '#1a1a1a' : '#FEF7F7',
   };
 
-  // Load user profile on app start
+  // Load user profile and check authentication on app start
   useEffect(() => {
-    loadUserProfile();
+    checkAuthAndLoadProfile();
   }, []);
 
-  const loadUserProfile = async () => {
+  const checkAuthAndLoadProfile = async () => {
     try {
-      const storedProfile = await AsyncStorage.getItem('userProfile');
-      if (storedProfile) {
-        const profile = JSON.parse(storedProfile);
-        setUserProfile(profile);
-        setShowQuestionnaire(false);
+      // Check if user is authenticated
+      const currentUser = await authService.getCurrentUser();
+      
+      if (currentUser) {
+        setIsAuthenticated(true);
+        // Load user profile from Supabase
+        const profile = await userService.getProfile(currentUser.id);
+        if (profile) {
+          setUserProfile(profile);
+        } else {
+          setShowQuestionnaire(true);
+        }
       } else {
-        setShowQuestionnaire(true);
+        // Always show auth screen first - no guest access
+        setShowAuth(true);
       }
     } catch (error) {
-      console.error('Error loading user profile:', error);
-      setShowQuestionnaire(true);
+      console.error('Error checking auth and loading profile:', error);
+      setShowAuth(true);
     } finally {
       setIsLoading(false);
     }
@@ -59,27 +76,29 @@ function App(): React.JSX.Element {
 
   const handleQuestionnaireComplete = async (profile: Partial<UserProfile>) => {
     try {
-      // Generate a simple user ID for demo purposes
-      const userId = `user_${Date.now()}`;
-      const fullProfile: UserProfile = {
-        id: userId,
-        name: profile.name || 'User',
-        email: profile.email,
-        trimester: profile.trimester || 'not_pregnant',
-        allergies: profile.allergies || [],
-        focus_areas: profile.focus_areas || [],
-        dietary_restrictions: profile.dietary_restrictions || [],
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
+      // All users must be authenticated now
+      const currentUser = await authService.getCurrentUser();
+      if (currentUser) {
+        const fullProfile: UserProfile = {
+          id: currentUser.id,
+          name: profile.name || 'User',
+          email: currentUser.email || '',
+          age: profile.age || '',
+          weight: profile.weight || '',
+          due_date: profile.due_date || '',
+          trimester: profile.trimester || 'not_pregnant',
+          allergies: profile.allergies || [],
+          focus_areas: profile.focus_areas || [],
+          dietary_restrictions: profile.dietary_restrictions || [],
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
 
-      // Save to AsyncStorage for demo purposes
-      await AsyncStorage.setItem('userProfile', JSON.stringify(fullProfile));
+        await userService.upsertProfile(fullProfile);
+        setUserProfile(fullProfile);
+        setShowTools(true); // Show tools screen after questionnaire completion
+      }
       
-      // In a real app, you would save to Supabase here
-      // await userService.upsertProfile(fullProfile);
-      
-      setUserProfile(fullProfile);
       setShowQuestionnaire(false);
     } catch (error) {
       console.error('Error saving user profile:', error);
@@ -88,6 +107,70 @@ function App(): React.JSX.Element {
 
   const handleQuestionnaireSkip = () => {
     setShowQuestionnaire(false);
+  };
+
+  const handleAuthSuccess = async (user: any) => {
+    setIsAuthenticated(true);
+    setShowAuth(false);
+    
+    // Load user profile from Supabase
+    const profile = await userService.getProfile(user.id);
+    if (profile) {
+      setUserProfile(profile);
+    } else {
+      setShowQuestionnaire(true);
+    }
+  };
+
+  const handleAuthSkip = () => {
+    // No longer allow skipping - users must create an account
+    Alert.alert(
+      'Account Required',
+      'You must create an account to use VitaMom. This ensures your data is securely saved and you can access it from any device.',
+      [{ text: 'OK' }]
+    );
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await authService.signOut();
+      setIsAuthenticated(false);
+      setUserProfile(null);
+      setShowAuth(true);
+    } catch (error) {
+      console.error('Sign out error:', error);
+    }
+  };
+
+  const handleUpdateProfile = (updatedProfile: Partial<UserProfile>) => {
+    if (userProfile) {
+      const newProfile = { ...userProfile, ...updatedProfile };
+      setUserProfile(newProfile);
+    }
+  };
+
+  const handleToolsComplete = () => {
+    setShowTools(false);
+  };
+
+  const handleReminderSettingsSave = async (settings: any) => {
+    try {
+      if (userProfile) {
+        const updatedProfile = {
+          ...userProfile,
+          reminder_enabled: settings.enabled,
+          reminder_time: settings.time,
+          reminder_message: settings.message,
+          reminder_trimester_specific: settings.trimesterSpecific,
+        };
+        
+        await userService.upsertProfile(updatedProfile);
+        setUserProfile(updatedProfile);
+        setShowReminderSettings(false);
+      }
+    } catch (error) {
+      console.error('Error saving reminder settings:', error);
+    }
   };
 
   const handleStartScanning = async () => {
@@ -124,11 +207,58 @@ function App(): React.JSX.Element {
       return null; // You could add a loading screen here
     }
 
+    if (showAuth) {
+      return (
+        <AuthScreen
+          onAuthSuccess={handleAuthSuccess}
+        />
+      );
+    }
+
     if (showQuestionnaire) {
       return (
         <UserQuestionnaire
           onComplete={handleQuestionnaireComplete}
           onSkip={handleQuestionnaireSkip}
+        />
+      );
+    }
+
+    if (showTools) {
+      return (
+        <PregnancyToolsScreen
+          onBack={handleToolsComplete}
+          onScanPress={() => {
+            setShowTools(false);
+            setCurrentTab('scan');
+          }}
+          onTrackerPress={() => {
+            setShowTools(false);
+            setCurrentTab('tracker');
+          }}
+          onInfoPress={() => {
+            setShowTools(false);
+            setCurrentTab('info');
+          }}
+          onSearchPress={() => {
+            setShowTools(false);
+            setCurrentTab('search');
+          }}
+          onProfilePress={() => {
+            setShowTools(false);
+            setCurrentTab('profile');
+          }}
+          userProfile={userProfile}
+        />
+      );
+    }
+
+    if (showReminderSettings) {
+      return (
+        <ReminderSettingsScreen
+          onBack={() => setShowReminderSettings(false)}
+          userProfile={userProfile}
+          onSaveSettings={handleReminderSettingsSave}
         />
       );
     }
@@ -140,9 +270,11 @@ function App(): React.JSX.Element {
             onScanPress={() => setCurrentTab('scan')}
             onTrackerPress={() => setCurrentTab('tracker')}
             onInfoPress={() => setCurrentTab('info')}
+            onProfilePress={() => setCurrentTab('profile')}
             onSettingsPress={() => setShowQuestionnaire(true)}
             userName={userProfile?.name || 'User'}
             userTrimester={userProfile?.trimester || 'not_pregnant'}
+            isAuthenticated={isAuthenticated}
           />
         );
       case 'scan':
@@ -150,6 +282,7 @@ function App(): React.JSX.Element {
           <ScanIngredients
             onStartScanning={handleStartScanning}
             onBack={() => setCurrentTab('home')}
+            onSearchPress={() => setCurrentTab('search')}
             userProfile={userProfile}
           />
         );
@@ -168,6 +301,23 @@ function App(): React.JSX.Element {
             onScanVitamins={() => setCurrentTab('scan')}
           />
         );
+      case 'search':
+        return (
+          <VitaminSearch
+            onBack={() => setCurrentTab('scan')}
+            userProfile={userProfile}
+          />
+        );
+      case 'profile':
+        return (
+          <ProfileScreen
+            onBack={() => setCurrentTab('home')}
+            onSignOut={handleSignOut}
+            userProfile={userProfile}
+            onUpdateProfile={handleUpdateProfile}
+            onReminderSettings={() => setShowReminderSettings(true)}
+          />
+        );
       default:
         return null;
     }
@@ -177,7 +327,7 @@ function App(): React.JSX.Element {
     <SafeAreaView style={[backgroundStyle, {flex: 1}]}>
       <ExpoStatusBar style={isDarkMode ? 'light' : 'dark'} />
       {renderCurrentScreen()}
-      {!showQuestionnaire && !isLoading && (
+      {!showQuestionnaire && !showTools && !showReminderSettings && !isLoading && (
         <BottomNavigation
           activeTab={currentTab}
           onTabChange={setCurrentTab}

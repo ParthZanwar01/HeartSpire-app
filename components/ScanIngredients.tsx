@@ -21,12 +21,14 @@ import { UserProfile } from '../services/supabase';
 interface ScanIngredientsProps {
   onStartScanning: () => void;
   onBack: () => void;
+  onSearchPress: () => void;
   userProfile?: UserProfile | null;
 }
 
 const ScanIngredients: React.FC<ScanIngredientsProps> = ({
   onStartScanning,
   onBack,
+  onSearchPress,
   userProfile,
 }) => {
   const [analyzing, setAnalyzing] = useState(false);
@@ -1057,7 +1059,7 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
             Scan your prenatal vitamin ingredients.
           </Text>
           <Text style={styles.instructionText}>
-            Take a photo or select from your library.{'\n'}
+            Take a photo, select from your library, or search for vitamins by name.{'\n'}
             Ensure the text is clear and well-lit for accurate scanning.
           </Text>
         </View>
@@ -1072,6 +1074,11 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
           <TouchableOpacity style={styles.libraryButton} onPress={handleLibraryPress}>
             <Text style={styles.buttonIcon}>📱</Text>
             <Text style={styles.buttonText}>Choose from Library</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.searchButton} onPress={onSearchPress}>
+            <Text style={styles.buttonIcon}>🔍</Text>
+            <Text style={styles.buttonText}>Search Vitamins</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1423,6 +1430,20 @@ const styles = StyleSheet.create({
     shadowColor: '#FF69B4',
     shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  searchButton: {
+    backgroundColor: '#4CAF50',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    shadowColor: '#4CAF50',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 3,
   },

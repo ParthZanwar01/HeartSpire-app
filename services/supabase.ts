@@ -1,10 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Replace these with your actual Supabase project URL and anon key
-// Get these from your Supabase dashboard: Settings → API
-const supabaseUrl = 'YOUR_SUPABASE_URL'; // e.g., 'https://yourproject.supabase.co'
-const supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY'; // e.g., 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+// Your Supabase project credentials
+const supabaseUrl = 'https://ppcgjeiamazpujkqdgjm.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBwY2dqZWlhbWF6cHVqa3FkZ2ptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEzOTgyNzcsImV4cCI6MjA3Njk3NDI3N30.7LC96k6n1cOM5vvsytgjY2YDduJHpzbDIRqZmaB-G9M';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -20,10 +19,18 @@ export interface UserProfile {
   id: string;
   name: string;
   email?: string;
+  age?: string;
+  gender?: string;
+  weight?: string;
+  due_date?: string;
   trimester: 'first' | 'second' | 'third' | 'not_pregnant';
   allergies: string[];
   focus_areas: string[];
   dietary_restrictions: string[];
+  reminder_enabled?: boolean;
+  reminder_time?: string;
+  reminder_message?: string;
+  reminder_trimester_specific?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -36,6 +43,96 @@ export interface TrimesterInfo {
   foods_to_include: string[];
   description: string;
 }
+
+// Authentication operations
+export const authService = {
+  // Sign up with email and password
+  async signUp(email: string, password: string, name: string) {
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name: name,
+          }
+        }
+      });
+      
+      if (error) throw error;
+      return { user: data.user, session: data.session };
+    } catch (error) {
+      console.error('Sign up error:', error);
+      throw error;
+    }
+  },
+
+  // Sign in with email and password
+  async signIn(email: string, password: string) {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      
+      if (error) throw error;
+      return { user: data.user, session: data.session };
+    } catch (error) {
+      console.error('Sign in error:', error);
+      throw error;
+    }
+  },
+
+  // Sign out
+  async signOut() {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+    } catch (error) {
+      console.error('Sign out error:', error);
+      throw error;
+    }
+  },
+
+  // Get current user
+  async getCurrentUser() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      return user;
+    } catch (error) {
+      console.error('Get current user error:', error);
+      return null;
+    }
+  },
+
+  // Reset password
+  async resetPassword(email: string) {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: 'https://your-app.com/reset-password',
+      });
+      
+      if (error) throw error;
+    } catch (error) {
+      console.error('Reset password error:', error);
+      throw error;
+    }
+  },
+
+  // Update password
+  async updatePassword(newPassword: string) {
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+      
+      if (error) throw error;
+    } catch (error) {
+      console.error('Update password error:', error);
+      throw error;
+    }
+  }
+};
 
 // Database operations
 export const userService = {
