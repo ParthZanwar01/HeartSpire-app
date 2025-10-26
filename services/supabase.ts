@@ -139,6 +139,17 @@ export const userService = {
   // Create or update user profile
   async upsertProfile(profile: Partial<UserProfile>): Promise<UserProfile | null> {
     try {
+      // Ensure we have a user ID
+      if (!profile.id) {
+        throw new Error('Profile ID is required');
+      }
+
+      // Get the current user to ensure authentication context
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || user.id !== profile.id) {
+        throw new Error('User not authenticated or ID mismatch');
+      }
+
       const { data, error } = await supabase
         .from('user_profiles')
         .upsert(profile)
@@ -160,7 +171,7 @@ export const userService = {
         .from('user_profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
       
       if (error) throw error;
       return data;

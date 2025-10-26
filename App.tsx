@@ -36,6 +36,7 @@ function App(): React.JSX.Element {
   const [showTools, setShowTools] = useState(false);
   const [showReminderSettings, setShowReminderSettings] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
@@ -79,29 +80,28 @@ function App(): React.JSX.Element {
       // All users must be authenticated now
       const currentUser = await authService.getCurrentUser();
       if (currentUser) {
-        const fullProfile: UserProfile = {
+        // Merge questionnaire data with existing profile
+        const updatedProfile: UserProfile = {
+          ...userProfile!, // Use existing profile as base
+          ...profile, // Override with questionnaire data
           id: currentUser.id,
-          name: profile.name || 'User',
-          email: currentUser.email || '',
-          age: profile.age || '',
-          weight: profile.weight || '',
-          due_date: profile.due_date || '',
-          trimester: profile.trimester || 'not_pregnant',
-          allergies: profile.allergies || [],
-          focus_areas: profile.focus_areas || [],
-          dietary_restrictions: profile.dietary_restrictions || [],
-          created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
 
-        await userService.upsertProfile(fullProfile);
-        setUserProfile(fullProfile);
-        setShowTools(true); // Show tools screen after questionnaire completion
+        const savedProfile = await userService.upsertProfile(updatedProfile);
+        if (savedProfile) {
+          setUserProfile(savedProfile);
+          setShowTools(true); // Show tools screen after questionnaire completion
+        } else {
+          console.error('Failed to update user profile');
+          Alert.alert('Error', 'Failed to save your profile. Please try again.');
+        }
       }
       
       setShowQuestionnaire(false);
     } catch (error) {
       console.error('Error saving user profile:', error);
+      Alert.alert('Error', 'Failed to save your profile. Please try again.');
     }
   };
 
@@ -112,13 +112,36 @@ function App(): React.JSX.Element {
   const handleAuthSuccess = async (user: any) => {
     setIsAuthenticated(true);
     setShowAuth(false);
+    setCurrentUser(user);
     
     // Load user profile from Supabase
     const profile = await userService.getProfile(user.id);
     if (profile) {
       setUserProfile(profile);
     } else {
-      setShowQuestionnaire(true);
+      // Create a basic profile with auth data for new users
+      const basicProfile: Partial<UserProfile> = {
+        id: user.id,
+        name: user.user_metadata?.name || 'User',
+        email: user.email || '',
+        trimester: 'not_pregnant',
+        allergies: [],
+        focus_areas: [],
+        dietary_restrictions: [],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      
+      // Save the basic profile to Supabase
+      const savedProfile = await userService.upsertProfile(basicProfile);
+      if (savedProfile) {
+        setUserProfile(savedProfile);
+        // Show questionnaire for additional details
+        setShowQuestionnaire(true);
+      } else {
+        console.error('Failed to create user profile');
+        Alert.alert('Error', 'Failed to create your profile. Please try again.');
+      }
     }
   };
 
@@ -220,6 +243,8 @@ function App(): React.JSX.Element {
         <UserQuestionnaire
           onComplete={handleQuestionnaireComplete}
           onSkip={handleQuestionnaireSkip}
+          user={currentUser}
+          existingProfile={userProfile}
         />
       );
     }

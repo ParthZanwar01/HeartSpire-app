@@ -8,29 +8,44 @@ import {
   ScrollView,
   TextInput,
   Alert,
+  Platform,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { UserProfile } from '../services/supabase';
 
 interface UserQuestionnaireProps {
   onComplete: (profile: Partial<UserProfile>) => void;
   onSkip: () => void;
+  user?: {
+    id: string;
+    email?: string;
+    user_metadata?: {
+      name?: string;
+    };
+  };
+  existingProfile?: UserProfile | null;
 }
 
 const UserQuestionnaire: React.FC<UserQuestionnaireProps> = ({
   onComplete,
   onSkip,
+  user,
+  existingProfile,
 }) => {
   const [currentStep, setCurrentStep] = useState(0);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const [profile, setProfile] = useState<Partial<UserProfile>>({
-    name: '',
-    age: '',
-    gender: '',
-    weight: '',
-    due_date: '',
-    trimester: 'not_pregnant',
-    allergies: [],
-    focus_areas: [],
-    dietary_restrictions: [],
+    name: existingProfile?.name || user?.user_metadata?.name || '',
+    email: existingProfile?.email || user?.email || '',
+    age: existingProfile?.age || '',
+    gender: existingProfile?.gender || '',
+    weight: existingProfile?.weight || '',
+    due_date: existingProfile?.due_date || '',
+    trimester: existingProfile?.trimester || 'not_pregnant',
+    allergies: existingProfile?.allergies || [],
+    focus_areas: existingProfile?.focus_areas || [],
+    dietary_restrictions: existingProfile?.dietary_restrictions || [],
   });
 
   const steps = [
@@ -38,11 +53,6 @@ const UserQuestionnaire: React.FC<UserQuestionnaireProps> = ({
       title: 'Welcome to VitaMom!',
       subtitle: 'Let\'s personalize your experience',
       content: 'welcome'
-    },
-    {
-      title: 'What\'s your name?',
-      subtitle: 'We\'d love to know what to call you',
-      content: 'name'
     },
     {
       title: 'How old are you?',
@@ -132,9 +142,6 @@ const UserQuestionnaire: React.FC<UserQuestionnaireProps> = ({
     }
   };
 
-  const handleNameChange = (name: string) => {
-    setProfile({ ...profile, name });
-  };
 
   const handleAgeChange = (age: string) => {
     setProfile({ ...profile, age });
@@ -147,6 +154,23 @@ const UserQuestionnaire: React.FC<UserQuestionnaireProps> = ({
 
   const handleDueDateChange = (due_date: string) => {
     setProfile({ ...profile, due_date });
+  };
+
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setSelectedDate(selectedDate);
+      const formattedDate = selectedDate.toLocaleDateString('en-US', {
+        month: '2-digit',
+        day: '2-digit',
+        year: 'numeric'
+      });
+      setProfile({ ...profile, due_date: formattedDate });
+    }
+  };
+
+  const showDatePickerModal = () => {
+    setShowDatePicker(true);
   };
 
   const handlePregnancyChange = (isPregnant: boolean) => {
@@ -202,20 +226,6 @@ const UserQuestionnaire: React.FC<UserQuestionnaireProps> = ({
           </View>
         );
 
-      case 'name':
-        return (
-          <View style={styles.stepContent}>
-            <Text style={styles.stepTitle}>{step.title}</Text>
-            <Text style={styles.stepSubtitle}>{step.subtitle}</Text>
-            <TextInput
-              style={styles.textInput}
-              value={profile.name}
-              onChangeText={handleNameChange}
-              placeholder="Enter your name"
-              placeholderTextColor="#999"
-            />
-          </View>
-        );
 
       case 'age':
         return (
@@ -261,16 +271,28 @@ const UserQuestionnaire: React.FC<UserQuestionnaireProps> = ({
           <View style={styles.stepContent}>
             <Text style={styles.stepTitle}>{step.title}</Text>
             <Text style={styles.stepSubtitle}>{step.subtitle}</Text>
-            <TextInput
-              style={styles.textInput}
-              value={profile.due_date}
-              onChangeText={handleDueDateChange}
-              placeholder="MM/DD/YYYY (e.g., 06/15/2024)"
-              placeholderTextColor="#999"
-            />
+            <TouchableOpacity
+              style={styles.datePickerButton}
+              onPress={showDatePickerModal}
+            >
+              <Text style={styles.datePickerButtonText}>
+                {profile.due_date || 'Select your due date'}
+              </Text>
+              <Text style={styles.datePickerIcon}>📅</Text>
+            </TouchableOpacity>
             <Text style={styles.inputHelper}>
               This helps us calculate your exact trimester and provide precise guidance
             </Text>
+            {showDatePicker && (
+              <DateTimePicker
+                value={selectedDate}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={handleDateChange}
+                minimumDate={new Date()}
+                maximumDate={new Date(new Date().getFullYear() + 1, 11, 31)}
+              />
+            )}
           </View>
         );
 
@@ -435,8 +457,6 @@ const UserQuestionnaire: React.FC<UserQuestionnaireProps> = ({
 
   const canProceed = () => {
     switch (steps[currentStep].content) {
-      case 'name':
-        return profile.name && profile.name.trim().length > 0;
       case 'age':
         return profile.age && profile.age.trim().length > 0 && !isNaN(Number(profile.age));
       case 'weight':
@@ -693,6 +713,26 @@ const styles = StyleSheet.create({
   },
   nextButtonTextDisabled: {
     color: '#999',
+  },
+  datePickerButton: {
+    width: '100%',
+    height: 50,
+    borderWidth: 2,
+    borderColor: '#FFE4E1',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  datePickerButtonText: {
+    fontSize: 16,
+    color: '#333',
+    flex: 1,
+  },
+  datePickerIcon: {
+    fontSize: 20,
   },
 });
 
