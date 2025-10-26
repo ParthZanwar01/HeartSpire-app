@@ -27,6 +27,7 @@ export interface UserProfile {
   allergies: string[];
   focus_areas: string[];
   dietary_restrictions: string[];
+  account_status: 'pending' | 'active';
   reminder_enabled?: boolean;
   reminder_time?: string;
   reminder_message?: string;
@@ -136,31 +137,74 @@ export const authService = {
 
 // Database operations
 export const userService = {
-  // Create or update user profile
-  async upsertProfile(profile: Partial<UserProfile>): Promise<UserProfile | null> {
+  // Create new user profile
+  async createProfile(profile: Partial<UserProfile>): Promise<UserProfile | null> {
     try {
       // Ensure we have a user ID
       if (!profile.id) {
         throw new Error('Profile ID is required');
       }
 
-      // Get the current user to ensure authentication context
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || user.id !== profile.id) {
-        throw new Error('User not authenticated or ID mismatch');
-      }
+      console.log('Creating new profile with ID:', profile.id);
 
       const { data, error } = await supabase
         .from('user_profiles')
-        .upsert(profile)
+        .insert(profile)
         .select()
         .single();
       
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
+      
+      console.log('Successfully created profile:', data);
       return data;
     } catch (error) {
-      console.error('Error upserting profile:', error);
+      console.error('Error creating profile:', error);
       return null;
+    }
+  },
+
+  // Update existing user profile
+  async updateProfile(profile: Partial<UserProfile>): Promise<UserProfile | null> {
+    try {
+      // Ensure we have a user ID
+      if (!profile.id) {
+        throw new Error('Profile ID is required');
+      }
+
+      console.log('Updating profile with ID:', profile.id);
+
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .update(profile)
+        .eq('id', profile.id)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
+      
+      console.log('Successfully updated profile:', data);
+      return data;
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      return null;
+    }
+  },
+
+  // Create or update user profile (for backward compatibility)
+  async upsertProfile(profile: Partial<UserProfile>): Promise<UserProfile | null> {
+    // Try to get existing profile first
+    const existingProfile = await this.getProfile(profile.id!);
+    
+    if (existingProfile) {
+      return this.updateProfile(profile);
+    } else {
+      return this.createProfile(profile);
     }
   },
 

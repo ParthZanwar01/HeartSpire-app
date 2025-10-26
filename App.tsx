@@ -11,6 +11,7 @@ import {
   StatusBar,
   StyleSheet,
   useColorScheme,
+  Alert,
 } from 'react-native';
 import {StatusBar as ExpoStatusBar} from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
@@ -60,6 +61,10 @@ function App(): React.JSX.Element {
         const profile = await userService.getProfile(currentUser.id);
         if (profile) {
           setUserProfile(profile);
+          // Check if user needs to complete questionnaire
+          if (profile.account_status === 'pending') {
+            setShowQuestionnaire(true);
+          }
         } else {
           setShowQuestionnaire(true);
         }
@@ -80,15 +85,27 @@ function App(): React.JSX.Element {
       // All users must be authenticated now
       const currentUser = await authService.getCurrentUser();
       if (currentUser) {
-        // Merge questionnaire data with existing profile
-        const updatedProfile: UserProfile = {
-          ...userProfile!, // Use existing profile as base
-          ...profile, // Override with questionnaire data
+        // Create complete profile with all questionnaire data
+        const completeProfile: UserProfile = {
           id: currentUser.id,
+          name: profile.name || userProfile?.name || 'User',
+          email: profile.email || userProfile?.email || currentUser.email || '',
+          age: profile.age || '',
+          gender: profile.gender || '',
+          weight: profile.weight || '',
+          due_date: profile.due_date || '',
+          trimester: profile.trimester || 'not_pregnant',
+          allergies: profile.allergies || [],
+          focus_areas: profile.focus_areas || [],
+          dietary_restrictions: profile.dietary_restrictions || [],
+          account_status: 'active', // Complete profile = active status
+          created_at: userProfile?.created_at || new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
 
-        const savedProfile = await userService.upsertProfile(updatedProfile);
+        console.log('Saving complete profile with questionnaire data:', completeProfile);
+
+        const savedProfile = await userService.updateProfile(completeProfile);
         if (savedProfile) {
           setUserProfile(savedProfile);
           setShowTools(true); // Show tools screen after questionnaire completion
@@ -110,6 +127,11 @@ function App(): React.JSX.Element {
   };
 
   const handleAuthSuccess = async (user: any) => {
+    console.log('Auth success - User object:', user);
+    console.log('User ID:', user.id);
+    console.log('User email:', user.email);
+    console.log('User metadata:', user.user_metadata);
+    
     setIsAuthenticated(true);
     setShowAuth(false);
     setCurrentUser(user);
@@ -118,6 +140,10 @@ function App(): React.JSX.Element {
     const profile = await userService.getProfile(user.id);
     if (profile) {
       setUserProfile(profile);
+      // Check if user needs to complete questionnaire
+      if (profile.account_status === 'pending') {
+        setShowQuestionnaire(true);
+      }
     } else {
       // Create a basic profile with auth data for new users
       const basicProfile: Partial<UserProfile> = {
@@ -128,12 +154,15 @@ function App(): React.JSX.Element {
         allergies: [],
         focus_areas: [],
         dietary_restrictions: [],
+        account_status: 'pending', // New users start with pending status
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
       
-      // Save the basic profile to Supabase
-      const savedProfile = await userService.upsertProfile(basicProfile);
+      console.log('Creating basic profile:', basicProfile);
+      
+      // Save the basic profile to Supabase (new user, so use createProfile)
+      const savedProfile = await userService.createProfile(basicProfile);
       if (savedProfile) {
         setUserProfile(savedProfile);
         // Show questionnaire for additional details

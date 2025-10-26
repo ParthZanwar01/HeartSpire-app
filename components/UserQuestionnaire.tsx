@@ -46,6 +46,7 @@ const UserQuestionnaire: React.FC<UserQuestionnaireProps> = ({
     allergies: existingProfile?.allergies || [],
     focus_areas: existingProfile?.focus_areas || [],
     dietary_restrictions: existingProfile?.dietary_restrictions || [],
+    account_status: existingProfile?.account_status || 'pending',
   });
 
   const steps = [
@@ -132,6 +133,7 @@ const UserQuestionnaire: React.FC<UserQuestionnaireProps> = ({
     if (currentStep < steps.length - 1) {
       setCurrentStep(currentStep + 1);
     } else {
+      console.log('Questionnaire completed with profile data:', profile);
       onComplete(profile);
     }
   };
