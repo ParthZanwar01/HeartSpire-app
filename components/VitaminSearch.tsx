@@ -11,6 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import { UserProfile } from '../services/supabase';
+import { findIngredient, INGREDIENT_DATABASE } from '../services/IngredientKnowledgeBase';
 
 interface VitaminSearchProps {
   onBack: () => void;
@@ -39,6 +40,139 @@ const VitaminSearch: React.FC<VitaminSearchProps> = ({
   // ChatGPT API configuration
   const OPENAI_API_KEY = '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';
 
+  // Helper function to get trimester-specific recommendations
+  const getTrimesterRecommendation = (vitaminName: string): string => {
+    const trimesterMap: { [key: string]: string } = {
+      'Folic Acid': 'Most critical in first trimester for neural tube development. Continue throughout pregnancy.',
+      'Iron': 'Essential throughout pregnancy, especially second and third trimesters for increased blood volume.',
+      'DHA (Docosahexaenoic Acid)': 'Important throughout pregnancy, especially third trimester for baby brain development.',
+      'Iodine': 'Critical throughout pregnancy for baby brain and thyroid development.',
+      'Vitamin D3': 'Essential throughout pregnancy for calcium absorption and bone development.',
+      'Calcium': 'Important throughout pregnancy, especially third trimester for baby bone development.',
+      'Vitamin B12': 'Essential throughout pregnancy for nervous system development.',
+      'Choline': 'Important throughout pregnancy, especially third trimester for brain development.',
+    };
+    
+    return trimesterMap[vitaminName] || 'Important throughout pregnancy for overall health and development.';
+  };
+
+  // Helper function to get natural food sources
+  const getNaturalSources = (vitaminName: string): string[] => {
+    const sourcesMap: { [key: string]: string[] } = {
+      'Folic Acid': ['Leafy greens (spinach, kale)', 'Fortified cereals', 'Beans and lentils', 'Citrus fruits'],
+      'Iron': ['Lean red meat', 'Spinach', 'Fortified cereals', 'Beans'],
+      'DHA (Docosahexaenoic Acid)': ['Fatty fish (salmon, sardines)', 'Algal oil supplements', 'Fortified eggs'],
+      'Iodine': ['Iodized salt', 'Seafood', 'Dairy products', 'Seaweed'],
+      'Vitamin D3': ['Sunlight exposure', 'Fatty fish', 'Fortified milk', 'Egg yolks'],
+      'Calcium': ['Dairy products', 'Leafy greens', 'Fortified plant milks', 'Sardines'],
+      'Vitamin B12': ['Animal products', 'Fortified cereals', 'Nutritional yeast'],
+      'Choline': ['Eggs', 'Meat', 'Fish', 'Dairy products'],
+      'Vitamin C': ['Citrus fruits', 'Bell peppers', 'Strawberries', 'Broccoli'],
+      'Vitamin A': ['Sweet potatoes', 'Carrots', 'Spinach', 'Fortified milk'],
+    };
+    
+    return sourcesMap[vitaminName] || ['Various food sources', 'Fortified foods', 'Supplements'];
+  };
+
+  // Comprehensive fact-checking function
+  const factCheckVitaminInfo = (vitamin: any): { isValid: boolean; corrections: string[]; warnings: string[] } => {
+    const corrections: string[] = [];
+    const warnings: string[] = [];
+    let isValid = true;
+
+    const vitaminName = vitamin.name?.toLowerCase() || '';
+    
+    // Fact-check dosage ranges against medical standards
+    if (vitamin.dosage) {
+      const dosageStr = vitamin.dosage.toLowerCase();
+      
+      // Check for unrealistic dosages
+      if (vitaminName.includes('vitamin a') || vitaminName.includes('retinol')) {
+        if (dosageStr.includes('iu') && dosageStr.match(/\d+/)) {
+          const iuMatch = dosageStr.match(/(\d+)/);
+          if (iuMatch && parseInt(iuMatch[1]) > 10000) {
+            warnings.push('⚠️ High Vitamin A dosage detected - consult healthcare provider');
+          }
+        }
+      }
+      
+      if (vitaminName.includes('iron')) {
+        if (dosageStr.match(/\d+/)) {
+          const mgMatch = dosageStr.match(/(\d+)/);
+          if (mgMatch && parseInt(mgMatch[1]) > 45) {
+            warnings.push('⚠️ High iron dosage detected - may cause side effects');
+          }
+        }
+      }
+      
+      if (vitaminName.includes('folic acid') || vitaminName.includes('folate')) {
+        if (dosageStr.match(/\d+/)) {
+          const mcgMatch = dosageStr.match(/(\d+)/);
+          if (mcgMatch && parseInt(mcgMatch[1]) > 1000) {
+            warnings.push('⚠️ High folic acid dosage detected - consult healthcare provider');
+          }
+        }
+      }
+    }
+
+    // Fact-check pregnancy safety claims
+    if (vitamin.pregnancySafe !== undefined) {
+      // Known unsafe vitamins during pregnancy
+      const unsafeVitamins = ['vitamin a (high doses)', 'retinol (high doses)', 'vitamin e (high doses)'];
+      const isUnsafeVitamin = unsafeVitamins.some(unsafe => vitaminName.includes(unsafe));
+      
+      if (isUnsafeVitamin && vitamin.pregnancySafe === true) {
+        corrections.push('❌ Pregnancy safety claim corrected - high doses may be harmful');
+        vitamin.pregnancySafe = false;
+        isValid = false;
+      }
+    }
+
+    // Fact-check benefits against known medical facts
+    if (vitamin.benefits) {
+      const benefits = vitamin.benefits.toLowerCase();
+      
+      // Check for medical inaccuracies
+      if (vitaminName.includes('folic acid') && !benefits.includes('neural tube')) {
+        corrections.push('✅ Added critical neural tube defect prevention benefit');
+        vitamin.benefits += ' Essential for preventing neural tube defects like spina bifida.';
+      }
+      
+      if (vitaminName.includes('iron') && !benefits.includes('anemia')) {
+        corrections.push('✅ Added anemia prevention benefit');
+        vitamin.benefits += ' Prevents iron-deficiency anemia during pregnancy.';
+      }
+      
+      if (vitaminName.includes('dha') && !benefits.includes('brain')) {
+        corrections.push('✅ Added brain development benefit');
+        vitamin.benefits += ' Supports baby\'s brain and eye development.';
+      }
+    }
+
+    // Fact-check sources
+    if (vitamin.sources && Array.isArray(vitamin.sources)) {
+      const sources = vitamin.sources.map((s: string) => s.toLowerCase());
+      
+      // Validate food sources
+      if (vitaminName.includes('vitamin b12') && !sources.some(s => s.includes('animal') || s.includes('meat'))) {
+        corrections.push('✅ Added animal product sources for B12');
+        vitamin.sources.push('Animal products (meat, fish, dairy)');
+      }
+      
+      if (vitaminName.includes('vitamin d') && !sources.some(s => s.includes('sun') || s.includes('fish'))) {
+        corrections.push('✅ Added sunlight and fish sources for Vitamin D');
+        vitamin.sources.push('Sunlight exposure', 'Fatty fish');
+      }
+    }
+
+    // Check for suspicious or unrealistic claims
+    if (vitamin.benefits && vitamin.benefits.toLowerCase().includes('cure')) {
+      warnings.push('⚠️ Medical claims should be verified with healthcare provider');
+    }
+
+    return { isValid, corrections, warnings };
+  };
+
   const searchVitamins = async () => {
     if (!searchQuery.trim()) {
       Alert.alert('Please enter a vitamin name', 'Type the name of a vitamin you want to learn about.');
@@ -52,6 +186,7 @@ const VitaminSearch: React.FC<VitaminSearchProps> = ({
     try {
       console.log('🔍 Searching for vitamin:', searchQuery);
       
+      // First, try AI search for comprehensive online information
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -63,36 +198,40 @@ const VitaminSearch: React.FC<VitaminSearchProps> = ({
           messages: [
             {
               role: 'user',
-              content: `I'm looking for information about the vitamin/supplement: "${searchQuery}". 
+              content: `I'm looking for detailed information about the vitamin/supplement: "${searchQuery}". 
 
-Please provide detailed information in this exact JSON format:
+IMPORTANT: This is for a pregnancy health app, so focus specifically on pregnancy safety and benefits.
+
+Please provide comprehensive information in this exact JSON format:
 
 {
   "vitamins": [
     {
-      "name": "exact vitamin name",
-      "benefits": "key health benefits (2-3 sentences)",
-      "dosage": "recommended daily dosage",
+      "name": "exact vitamin/supplement name",
+      "benefits": "detailed health benefits during pregnancy (3-4 sentences explaining what it does for mom and baby)",
+      "dosage": "specific recommended daily dosage for pregnant women with units (mg, mcg, IU, etc.)",
       "pregnancySafe": true/false,
-      "trimesterRecommendation": "specific advice for pregnancy (which trimester is best, why important)",
-      "warnings": ["warning 1", "warning 2"],
-      "sources": ["food source 1", "food source 2", "food source 3"]
+      "trimesterRecommendation": "specific trimester advice (e.g., 'Most important in first trimester for neural tube development' or 'Essential throughout pregnancy for bone health')",
+      "warnings": ["specific warning 1", "specific warning 2", "any contraindications"],
+      "sources": ["natural food source 1", "natural food source 2", "natural food source 3"]
     }
   ]
 }
 
-Focus on:
-1. Pregnancy safety and trimester-specific benefits
-2. Recommended dosages for pregnant women
-3. Natural food sources
-4. Any warnings or precautions
-5. Why this vitamin is important during pregnancy
+CRITICAL REQUIREMENTS:
+1. Be medically accurate - only include real vitamins/supplements
+2. Focus on pregnancy-specific benefits and safety
+3. Include specific dosage recommendations for pregnant women
+4. Mention trimester-specific importance where applicable
+5. Include natural food sources
+6. List any warnings or precautions
+7. If the search term is not a real vitamin/supplement, return an empty vitamins array
 
-If the search term is not a real vitamin/supplement, return an empty vitamins array.`
+Common vitamins to consider: Vitamin A, B-complex vitamins, Vitamin C, Vitamin D, Vitamin E, Vitamin K, Folic Acid, Iron, Calcium, Magnesium, Zinc, Iodine, DHA, Choline, etc.`
             }
           ],
-          max_tokens: 1500,
-          temperature: 0.3,
+          max_tokens: 2000,
+          temperature: 0.2, // Lower temperature for more consistent, accurate results
         }),
       });
 
@@ -109,7 +248,7 @@ If the search term is not a real vitamin/supplement, return an empty vitamins ar
 
       console.log('📊 OpenAI response:', content);
 
-      // Parse the JSON response
+      // Parse the JSON response with enhanced validation
       let parsed;
       try {
         // Try to extract JSON from the response
@@ -121,26 +260,121 @@ If the search term is not a real vitamin/supplement, return an empty vitamins ar
         }
       } catch (parseError) {
         console.error('❌ JSON parsing error:', parseError);
-        throw new Error('Could not parse vitamin information');
+        console.log('Raw AI response:', content);
+        throw new Error('Could not parse vitamin information. Please try again.');
       }
 
-      if (parsed.vitamins && Array.isArray(parsed.vitamins)) {
-        setSearchResults(parsed.vitamins);
-        if (parsed.vitamins.length === 0) {
-          Alert.alert(
-            'No Results Found',
-            `Could not find information about "${searchQuery}". Try searching for a specific vitamin name like "Vitamin D", "Folic Acid", or "Iron".`
-          );
-        }
-      } else {
-        throw new Error('Invalid response format');
+      if (!parsed.vitamins || !Array.isArray(parsed.vitamins)) {
+        console.error('Invalid response structure:', parsed);
+        throw new Error('Invalid response format from AI');
       }
+
+      if (parsed.vitamins.length === 0) {
+        Alert.alert(
+          'No Results Found',
+          `No information found for "${searchQuery}". Please try a different vitamin name or check the spelling.`
+        );
+        return;
+      }
+
+      // Enhanced validation and cleaning of results with comprehensive fact-checking
+      const validatedResults = parsed.vitamins
+        .filter((vitamin: any) => {
+          // Basic validation
+          if (!vitamin.name || typeof vitamin.name !== 'string') {
+            console.warn('Skipping invalid vitamin - missing name:', vitamin);
+            return false;
+          }
+          if (!vitamin.benefits || typeof vitamin.benefits !== 'string') {
+            console.warn('Skipping invalid vitamin - missing benefits:', vitamin);
+            return false;
+          }
+          return true;
+        })
+        .map((vitamin: any) => {
+          // Clean and validate each field
+          const cleanedVitamin = {
+            name: vitamin.name.trim(),
+            benefits: vitamin.benefits.trim(),
+            dosage: typeof vitamin.dosage === 'string' ? vitamin.dosage.trim() : 'Consult your healthcare provider',
+            pregnancySafe: typeof vitamin.pregnancySafe === 'boolean' ? vitamin.pregnancySafe : true,
+            trimesterRecommendation: typeof vitamin.trimesterRecommendation === 'string' 
+              ? vitamin.trimesterRecommendation.trim() 
+              : 'Important throughout pregnancy',
+            warnings: Array.isArray(vitamin.warnings) 
+              ? vitamin.warnings.filter((w: any) => typeof w === 'string').map((w: string) => w.trim())
+              : [],
+            sources: Array.isArray(vitamin.sources) 
+              ? vitamin.sources.filter((s: any) => typeof s === 'string').map((s: string) => s.trim())
+              : ['Various sources'],
+          };
+
+          // Comprehensive fact-checking
+          console.log('🔍 Fact-checking vitamin:', cleanedVitamin.name);
+          const factCheck = factCheckVitaminInfo(cleanedVitamin);
+          
+          if (factCheck.corrections.length > 0) {
+            console.log('✅ Fact-check corrections applied:', factCheck.corrections);
+          }
+          
+          if (factCheck.warnings.length > 0) {
+            console.log('⚠️ Fact-check warnings added:', factCheck.warnings);
+            // Add warnings to the vitamin's warning list
+            cleanedVitamin.warnings.push(...factCheck.warnings);
+          }
+
+          // Additional validation for critical vitamins
+          if (cleanedVitamin.name.toLowerCase().includes('folic acid') || 
+              cleanedVitamin.name.toLowerCase().includes('folate')) {
+            if (!cleanedVitamin.warnings.some(w => w.toLowerCase().includes('neural tube'))) {
+              cleanedVitamin.warnings.push('Essential for preventing neural tube defects');
+            }
+          }
+
+          return cleanedVitamin;
+        });
+
+      if (validatedResults.length === 0) {
+        Alert.alert(
+          'Invalid Results',
+          'The search returned invalid data. Please try a different search term.'
+        );
+        return;
+      }
+
+      console.log('✅ Validated search results:', validatedResults);
+      setSearchResults(validatedResults);
 
     } catch (error) {
-      console.error('❌ Search error:', error);
+      console.error('❌ AI search failed:', error);
+      
+      // Fallback to knowledge base if AI search fails
+      console.log('🔄 Falling back to knowledge base...');
+      const knowledgeBaseResult = findIngredient(searchQuery);
+      
+      if (knowledgeBaseResult) {
+        console.log('📚 Found in knowledge base:', knowledgeBaseResult.canonicalName);
+        
+        // Convert knowledge base result to VitaminInfo format
+        const vitaminInfo: VitaminInfo = {
+          name: knowledgeBaseResult.canonicalName,
+          benefits: knowledgeBaseResult.benefits || 'Essential nutrient for health and development.',
+          dosage: knowledgeBaseResult.pregnancyRecommendation || 'Consult your healthcare provider',
+          pregnancySafe: true, // Our knowledge base only contains pregnancy-safe nutrients
+          trimesterRecommendation: getTrimesterRecommendation(knowledgeBaseResult.canonicalName),
+          warnings: knowledgeBaseResult.warnings || [],
+          sources: getNaturalSources(knowledgeBaseResult.canonicalName),
+        };
+        
+        setSearchResults([vitaminInfo]);
+        setSearching(false);
+        return;
+      }
+      
+      // If neither AI nor knowledge base found results
       Alert.alert(
         'Search Failed',
-        `Could not search for "${searchQuery}". Please check your internet connection and try again.`
+        `Could not find information about "${searchQuery}". Please try a different vitamin name or check the spelling.`
       );
     } finally {
       setSearching(false);
@@ -352,7 +586,10 @@ If the search term is not a real vitamin/supplement, return an empty vitamins ar
             <View style={styles.suggestionsContainer}>
               <Text style={styles.suggestionsTitle}>Popular Searches:</Text>
               <View style={styles.suggestionsList}>
-                {['Vitamin D', 'Folic Acid', 'Iron', 'Calcium', 'Omega-3', 'B12'].map((suggestion) => (
+                {[
+                  'Folic Acid', 'Iron', 'Vitamin D3', 'DHA', 'Calcium', 
+                  'Vitamin B12', 'Iodine', 'Choline', 'Vitamin C', 'Magnesium'
+                ].map((suggestion) => (
                   <TouchableOpacity
                     key={suggestion}
                     style={styles.suggestionChip}
