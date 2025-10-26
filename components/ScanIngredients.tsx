@@ -15,6 +15,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {AnalysisResult} from '../services/IngredientAI';
+import { analyzeCurvedBottle, EnhancedAnalysisResult } from '../services/CurvedBottleAI';
 import {findIngredient} from '../services/IngredientKnowledgeBase';
 import { UserProfile } from '../services/supabase';
 
@@ -346,7 +347,37 @@ Keep each description to 1-2 sentences.`;
     }
   };
 
-  const analyzeWithOpenAI = async (imageUri: string): Promise<AnalysisResult> => {
+  const analyzeWithCurvedBottleAI = async (imageUri: string): Promise<EnhancedAnalysisResult> => {
+    try {
+      console.log('🧠 Using Enhanced Curved Bottle Analysis (GPT-4o) - Optimized for curved surfaces!');
+      
+      // Use the enhanced curved bottle analysis
+      const result = await analyzeCurvedBottle(imageUri, OPENAI_API_KEY);
+      
+      console.log('📊 Analysis completed:', {
+        success: result.success,
+        ingredientCount: result.ingredients.length,
+        confidenceScore: result.confidenceScore,
+        analysisMethod: result.analysisMethod,
+        preprocessingApplied: result.preprocessingApplied
+      });
+      
+      return result;
+    } catch (error) {
+      console.error('❌ Enhanced analysis failed:', error);
+      return {
+        success: false,
+        ingredients: [],
+        error: error instanceof Error ? error.message : 'Analysis failed',
+        preprocessingApplied: [],
+        analysisMethod: 'single',
+        confidenceScore: 0,
+        suggestions: ['Try taking the photo again with better lighting', 'Ensure the label is fully visible'],
+      };
+    }
+  };
+
+  const analyzeWithOpenAI = async (imageUri: string): Promise<EnhancedAnalysisResult> => {
     try {
       console.log('🧠 Using OpenAI Vision (GPT-4o) - this is MUCH better than OCR!');
       
@@ -707,7 +738,7 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
         result = await analyzeWithBackend(processedImageUri);
       } else if (USE_OPENAI && OPENAI_API_KEY) {
         console.log('🧠 Using OpenAI Vision API');
-        result = await analyzeWithOpenAI(processedImageUri);
+        result = await analyzeWithCurvedBottleAI(processedImageUri);
       } else {
         Alert.alert(
           'Configuration Error',
@@ -1192,7 +1223,9 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
             {analysisResult.ingredients.map((ingredient, index) => {
               const ingredientInfo = findIngredient(ingredient.name);
               // Prioritize AI-generated description, fall back to knowledge base
-              const hasAIDescription = ingredient.description || ingredient.benefits;
+              const aiDescription = ingredient.description || ingredient.benefits;
+              const knowledgeBaseDescription = ingredientInfo?.benefits || ingredientInfo?.description;
+              const finalDescription = aiDescription || knowledgeBaseDescription;
               
               return (
                 <View key={index} style={styles.ingredientDetailCard}>
@@ -1203,19 +1236,19 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
                     <View style={styles.ingredientHeaderInfo}>
                       <Text style={styles.ingredientName}>{ingredient.name}</Text>
                       <Text style={styles.ingredientDosage}>
-                        {ingredient.amount} {ingredient.unit}
+                        {ingredient.amount || 'Unknown'} {ingredient.unit || 'Unknown'}
                         {ingredient.percentDailyValue && ` (${ingredient.percentDailyValue} DV)`}
                       </Text>
                     </View>
                   </View>
                   
-                  {/* AI-Generated Description (Priority) */}
-                  {hasAIDescription && (
+                  {/* Description (AI-generated or Knowledge Base) */}
+                  {finalDescription && (
                     <View style={styles.ingredientBenefits}>
                       <View style={styles.benefitRow}>
                         <Text style={styles.benefitIcon}>🤰</Text>
                         <Text style={styles.benefitText}>
-                          {ingredient.description || ingredient.benefits}
+                          {finalDescription}
                         </Text>
                       </View>
                       

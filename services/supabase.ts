@@ -45,6 +45,38 @@ export interface TrimesterInfo {
   description: string;
 }
 
+export interface VitaminIntakeLog {
+  id: string;
+  user_id: string;
+  vitamin_name: string;
+  vitamin_type?: string;
+  dosage?: string;
+  intake_date: string;
+  intake_time?: string;
+  notes?: string;
+  created_at: string;
+}
+
+export interface DailyVitaminSummary {
+  user_id: string;
+  vitamin_name: string;
+  intake_date: string;
+  times_taken: number;
+  dosages_taken: string;
+  notes_summary?: string;
+}
+
+export interface VitaminIntakeStats {
+  user_id: string;
+  vitamin_name: string;
+  week_start: string;
+  month_start: string;
+  total_intakes: number;
+  days_taken: number;
+  weekly_compliance_percentage: number;
+  monthly_compliance_percentage: number;
+}
+
 // Authentication operations
 export const authService = {
   // Sign up with email and password
@@ -262,6 +294,133 @@ export const userService = {
     } catch (error) {
       console.error('Error saving scan result:', error);
       return null;
+    }
+  }
+};
+
+// Vitamin intake tracking operations
+export const vitaminIntakeService = {
+  // Log a vitamin intake
+  async logIntake(intakeData: {
+    user_id: string;
+    vitamin_name: string;
+    vitamin_type?: string;
+    dosage?: string;
+    intake_time?: string;
+    notes?: string;
+  }): Promise<VitaminIntakeLog | null> {
+    try {
+      const { data, error } = await supabase
+        .from('vitamin_intake_logs')
+        .insert({
+          ...intakeData,
+          intake_date: new Date().toISOString(),
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error logging vitamin intake:', error);
+      return null;
+    }
+  },
+
+  // Get daily vitamin intake summary
+  async getDailySummary(userId: string, date?: string): Promise<DailyVitaminSummary[]> {
+    try {
+      const targetDate = date || new Date().toISOString().split('T')[0];
+      
+      const { data, error } = await supabase
+        .from('daily_vitamin_summary')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('intake_date', targetDate);
+      
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error getting daily summary:', error);
+      return [];
+    }
+  },
+
+  // Get vitamin intake statistics
+  async getIntakeStats(userId: string, vitaminName?: string): Promise<VitaminIntakeStats[]> {
+    try {
+      let query = supabase
+        .from('vitamin_intake_stats')
+        .select('*')
+        .eq('user_id', userId);
+      
+      if (vitaminName) {
+        query = query.eq('vitamin_name', vitaminName);
+      }
+      
+      const { data, error } = await query.order('week_start', { ascending: false });
+      
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error getting intake stats:', error);
+      return [];
+    }
+  },
+
+  // Get recent vitamin intake history
+  async getRecentIntakes(userId: string, limit: number = 10): Promise<VitaminIntakeLog[]> {
+    try {
+      const { data, error } = await supabase
+        .from('vitamin_intake_logs')
+        .select('*')
+        .eq('user_id', userId)
+        .order('intake_date', { ascending: false })
+        .limit(limit);
+      
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error getting recent intakes:', error);
+      return [];
+    }
+  },
+
+  // Get total intake count for a specific vitamin
+  async getTotalIntakeCount(userId: string, vitaminName: string): Promise<number> {
+    try {
+      const { count, error } = await supabase
+        .from('vitamin_intake_logs')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('vitamin_name', vitaminName);
+      
+      if (error) throw error;
+      return count || 0;
+    } catch (error) {
+      console.error('Error getting total intake count:', error);
+      return 0;
+    }
+  },
+
+  // Get intake count for today
+  async getTodayIntakeCount(userId: string, vitaminName: string): Promise<number> {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      const { count, error } = await supabase
+        .from('vitamin_intake_logs')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('vitamin_name', vitaminName)
+        .gte('intake_date', `${today}T00:00:00`)
+        .lt('intake_date', `${today}T23:59:59`);
+      
+      if (error) throw error;
+      return count || 0;
+    } catch (error) {
+      console.error('Error getting today intake count:', error);
+      return 0;
     }
   }
 };
