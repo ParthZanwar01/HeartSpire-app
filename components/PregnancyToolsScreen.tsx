@@ -17,6 +17,7 @@ interface PregnancyToolsScreenProps {
   onInfoPress: () => void;
   onSearchPress: () => void;
   onProfilePress: () => void;
+  onArticlesPress: () => void;
   userProfile: UserProfile | null;
 }
 
@@ -27,6 +28,7 @@ const PregnancyToolsScreen: React.FC<PregnancyToolsScreenProps> = ({
   onInfoPress,
   onSearchPress,
   onProfilePress,
+  onArticlesPress,
   userProfile,
 }) => {
   const getTrimesterInfo = () => {
@@ -77,6 +79,14 @@ const PregnancyToolsScreen: React.FC<PregnancyToolsScreenProps> = ({
       icon: '📚',
       color: '#FF9800',
       onPress: onInfoPress,
+    },
+    {
+      id: 'articles',
+      title: 'Articles',
+      description: 'Browse pregnancy and parenting guides',
+      icon: '📖',
+      color: '#E91E63',
+      onPress: onArticlesPress,
     },
     {
       id: 'profile',

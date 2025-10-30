@@ -1,0 +1,145 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  line-height: 1.6;
+  color: #333;
+  background: linear-gradient(135deg, #FEF7F7 0%, #FFF0F5 100%);
+  min-height: 100vh;
+}
+
+.App {
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 40px 20px;
+  background: white;
+  box-shadow: 0 10px 30px rgba(233, 30, 99, 0.1);
+  border-radius: 20px;
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 40px;
+  padding-bottom: 30px;
+  border-bottom: 3px solid #E91E63;
+}
+
+.logo {
+  font-size: 2.5rem;
+  font-weight: bold;
+  color: #E91E63;
+  margin-bottom: 10px;
+  text-shadow: 2px 2px 4px rgba(233, 30, 99, 0.1);
+}
+
+.subtitle {
+  color: #666;
+  font-size: 1.1rem;
+}
+
+.last-updated {
+  background: #FFF0F5;
+  padding: 15px;
+  border-radius: 10px;
+  margin-bottom: 30px;
+  border-left: 4px solid #E91E63;
+}
+
+h1 {
+  color: #E91E63;
+  font-size: 2rem;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+h2 {
+  color: #E91E63;
+  font-size: 1.5rem;
+  margin-top: 30px;
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #FFF0F5;
+}
+
+h3 {
+  color: #333;
+  font-size: 1.2rem;
+  margin-top: 20px;
+  margin-bottom: 10px;
+}
+
+p {
+  margin-bottom: 15px;
+  text-align: justify;
+}
+
+ul, ol {
+  margin-left: 20px;
+  margin-bottom: 15px;
+}
+
+li {
+  margin-bottom: 8px;
+}
+
+.highlight {
+  background: #FFF0F5;
+  padding: 15px;
+  border-radius: 10px;
+  border-left: 4px solid #E91E63;
+  margin: 20px 0;
+}
+
+.contact-info {
+  background: #F8F9FA;
+  padding: 20px;
+  border-radius: 10px;
+  margin-top: 30px;
+  border: 2px solid #E91E63;
+}
+
+.contact-info h3 {
+  color: #E91E63;
+  margin-bottom: 15px;
+}
+
+.contact-info p {
+  margin-bottom: 10px;
+}
+
+.footer {
+  text-align: center;
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 2px solid #FFF0F5;
+  color: #666;
+}
+
+@media (max-width: 768px) {
+  .container {
+    margin: 10px;
+    padding: 20px 15px;
+  }
+  
+  .logo {
+    font-size: 2rem;
+  }
+  
+  h1 {
+    font-size: 1.5rem;
+  }
+  
+  h2 {
+    font-size: 1.3rem;
+  }
+}

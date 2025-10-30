@@ -154,12 +154,12 @@ const VitaminSearch: React.FC<VitaminSearchProps> = ({
       const sources = vitamin.sources.map((s: string) => s.toLowerCase());
       
       // Validate food sources
-      if (vitaminName.includes('vitamin b12') && !sources.some(s => s.includes('animal') || s.includes('meat'))) {
+      if (vitaminName.includes('vitamin b12') && !sources.some((s: string) => s.includes('animal') || s.includes('meat'))) {
         corrections.push('✅ Added animal product sources for B12');
         vitamin.sources.push('Animal products (meat, fish, dairy)');
       }
       
-      if (vitaminName.includes('vitamin d') && !sources.some(s => s.includes('sun') || s.includes('fish'))) {
+      if (vitaminName.includes('vitamin d') && !sources.some((s: string) => s.includes('sun') || s.includes('fish'))) {
         corrections.push('✅ Added sunlight and fish sources for Vitamin D');
         vitamin.sources.push('Sunlight exposure', 'Fatty fish');
       }
@@ -326,7 +326,7 @@ Common vitamins to consider: Vitamin A, B-complex vitamins, Vitamin C, Vitamin D
           // Additional validation for critical vitamins
           if (cleanedVitamin.name.toLowerCase().includes('folic acid') || 
               cleanedVitamin.name.toLowerCase().includes('folate')) {
-            if (!cleanedVitamin.warnings.some(w => w.toLowerCase().includes('neural tube'))) {
+            if (!cleanedVitamin.warnings.some((w: string) => w.toLowerCase().includes('neural tube'))) {
               cleanedVitamin.warnings.push('Essential for preventing neural tube defects');
             }
           }

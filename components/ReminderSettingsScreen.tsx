@@ -67,7 +67,7 @@ const ReminderSettingsScreen: React.FC<ReminderSettingsScreenProps> = ({
     setLoading(true);
     try {
       // Schedule the reminder
-      const notificationId = await notificationService.scheduleDailyReminder(settings, userProfile);
+      const notificationId = await notificationService.scheduleDailyReminder(settings, userProfile || undefined);
       
       if (notificationId) {
         Alert.alert(
@@ -117,7 +117,7 @@ const ReminderSettingsScreen: React.FC<ReminderSettingsScreenProps> = ({
           body: "This is a test of your vitamin reminder!",
           data: { type: 'test' },
         },
-        trigger: { seconds: 5 },
+        trigger: { type: 'timeInterval', seconds: 5 } as any,
       });
       
       Alert.alert(
@@ -256,7 +256,7 @@ const ReminderSettingsScreen: React.FC<ReminderSettingsScreenProps> = ({
               <Text style={styles.messageTitle}>💊 Time for your vitamins!</Text>
               <Text style={styles.messageText}>
                 {settings.trimesterSpecific 
-                  ? notificationService.getPersonalizedMessage(userProfile)
+                  ? notificationService.getPersonalizedMessage(userProfile || undefined)
                   : settings.message
                 }
               </Text>

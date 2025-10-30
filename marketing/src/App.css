@@ -1,0 +1,261 @@
+.App {
+  text-align: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #FEF7F7 0%, #FFE4E1 100%);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.header {
+  margin-bottom: 60px;
+}
+
+.logo {
+  font-size: 3.5rem;
+  font-weight: bold;
+  color: #E91E63;
+  margin-bottom: 10px;
+}
+
+.tagline {
+  font-size: 1.3rem;
+  color: #666;
+  font-weight: 300;
+}
+
+.hero-section {
+  margin-bottom: 80px;
+}
+
+.hero-section h1 {
+  font-size: 3rem;
+  color: #E91E63;
+  margin-bottom: 20px;
+  font-weight: bold;
+}
+
+.hero-description {
+  font-size: 1.3rem;
+  color: #666;
+  line-height: 1.6;
+  margin-bottom: 40px;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.cta-buttons {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.primary-button {
+  background: #E91E63;
+  color: white;
+  border: none;
+  padding: 15px 30px;
+  border-radius: 25px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.primary-button:hover {
+  background: #FF69B4;
+  transform: translateY(-2px);
+}
+
+.secondary-button {
+  background: transparent;
+  color: #E91E63;
+  border: 2px solid #E91E63;
+  padding: 15px 30px;
+  border-radius: 25px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.secondary-button:hover {
+  background: #E91E63;
+  color: white;
+}
+
+.features-section {
+  margin-bottom: 80px;
+}
+
+.features-section h2 {
+  font-size: 2.5rem;
+  color: #E91E63;
+  margin-bottom: 50px;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 30px;
+}
+
+.feature-card {
+  background: white;
+  padding: 40px 30px;
+  border-radius: 20px;
+  box-shadow: 0 4px 15px rgba(233, 30, 99, 0.1);
+  transition: transform 0.3s ease;
+}
+
+.feature-card:hover {
+  transform: translateY(-5px);
+}
+
+.feature-icon {
+  font-size: 3rem;
+  margin-bottom: 20px;
+}
+
+.feature-card h3 {
+  color: #E91E63;
+  font-size: 1.5rem;
+  margin-bottom: 15px;
+}
+
+.feature-card p {
+  color: #666;
+  line-height: 1.6;
+  font-size: 1rem;
+}
+
+.download-section {
+  margin-bottom: 80px;
+  background: white;
+  padding: 60px 40px;
+  border-radius: 20px;
+  box-shadow: 0 4px 15px rgba(233, 30, 99, 0.1);
+}
+
+.download-section h2 {
+  font-size: 2.5rem;
+  color: #E91E63;
+  margin-bottom: 20px;
+}
+
+.download-section p {
+  font-size: 1.2rem;
+  color: #666;
+  margin-bottom: 40px;
+}
+
+.download-buttons {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.download-button {
+  background: #E91E63;
+  color: white;
+  border: none;
+  padding: 15px 30px;
+  border-radius: 25px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 200px;
+}
+
+.download-button:hover {
+  background: #FF69B4;
+  transform: translateY(-2px);
+}
+
+.footer {
+  text-align: center;
+  padding: 40px 0;
+  border-top: 1px solid #E91E63;
+}
+
+.footer p {
+  color: #666;
+  margin-bottom: 20px;
+}
+
+.footer-links {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+  flex-wrap: wrap;
+}
+
+.footer-link {
+  background: none;
+  border: none;
+  color: #E91E63;
+  text-decoration: none;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 5px;
+}
+
+.footer-link:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 15px;
+  }
+  
+  .logo {
+    font-size: 2.5rem;
+  }
+  
+  .tagline {
+    font-size: 1.1rem;
+  }
+  
+  .hero-section h1 {
+    font-size: 2rem;
+  }
+  
+  .hero-description {
+    font-size: 1.1rem;
+  }
+  
+  .features-section h2 {
+    font-size: 2rem;
+  }
+  
+  .download-section h2 {
+    font-size: 2rem;
+  }
+  
+  .features-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .cta-buttons,
+  .download-buttons {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .footer-links {
+    flex-direction: column;
+    gap: 15px;
+  }
+}
+

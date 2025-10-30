@@ -32,6 +32,7 @@ export interface UserProfile {
   reminder_time?: string;
   reminder_message?: string;
   reminder_trimester_specific?: boolean;
+  profile_picture?: string; // URL or base64 string for profile picture
   created_at: string;
   updated_at: string;
 }
@@ -293,6 +294,60 @@ export const userService = {
       return data;
     } catch (error) {
       console.error('Error saving scan result:', error);
+      return null;
+    }
+  },
+
+  // Update profile picture
+  async updateProfilePicture(userId: string, profilePicture: string): Promise<UserProfile | null> {
+    try {
+      // For now, store in AsyncStorage until database column is added
+      await AsyncStorage.setItem(`profile_picture_${userId}`, profilePicture);
+      
+      // Try to update in database (will fail until column is added)
+      try {
+        const { data, error } = await supabase
+          .from('user_profiles')
+          .update({ 
+            profile_picture: profilePicture,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', userId)
+          .select()
+          .single();
+        
+        if (error) {
+          console.warn('Database update failed, using AsyncStorage fallback:', error.message);
+        } else {
+          console.log('Successfully updated profile picture in database:', data);
+          return data;
+        }
+      } catch (dbError) {
+        console.warn('Database update failed, using AsyncStorage fallback:', dbError);
+      }
+      
+      // Return existing profile with profile_picture added
+      const existingProfile = await this.getProfile(userId);
+      if (existingProfile) {
+        return {
+          ...existingProfile,
+          profile_picture: profilePicture
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error updating profile picture:', error);
+      return null;
+    }
+  },
+
+  // Get profile picture from AsyncStorage
+  async getProfilePicture(userId: string): Promise<string | null> {
+    try {
+      return await AsyncStorage.getItem(`profile_picture_${userId}`);
+    } catch (error) {
+      console.error('Error getting profile picture:', error);
       return null;
     }
   }

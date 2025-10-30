@@ -5,15 +5,18 @@
  * @format
  */
 
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useRef} from 'react';
 import {
   SafeAreaView,
   StatusBar,
   StyleSheet,
   useColorScheme,
   Alert,
+  View,
+  Animated,
 } from 'react-native';
 import {StatusBar as ExpoStatusBar} from 'expo-status-bar';
+import {Provider as PaperProvider, MD3LightTheme, MD3DarkTheme} from 'react-native-paper';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import HomeScreen from './components/HomeScreen';
@@ -26,20 +29,67 @@ import AuthScreen from './components/AuthScreen';
 import ProfileScreen from './components/ProfileScreen';
 import PregnancyToolsScreen from './components/PregnancyToolsScreen';
 import ReminderSettingsScreen from './components/ReminderSettingsScreen';
+import ArticlesScreen from './components/ArticlesScreen';
 import BottomNavigation from './components/BottomNavigation';
 import { UserProfile, userService, authService } from './services/supabase';
 
 function App(): React.JSX.Element {
   const isDarkMode = useColorScheme() === 'dark';
-  const [currentTab, setCurrentTab] = useState<'home' | 'scan' | 'tracker' | 'info' | 'search' | 'profile'>('home');
+  const [currentTab, setCurrentTab] = useState<'home' | 'scan' | 'tracker' | 'info' | 'search' | 'profile' | 'articles'>('home');
   const [showQuestionnaire, setShowQuestionnaire] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [showTools, setShowTools] = useState(false);
   const [showReminderSettings, setShowReminderSettings] = useState(false);
+  const [showArticles, setShowArticles] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
+
+  // Animation state for page transitions
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const [previousTab, setPreviousTab] = useState<string>('home');
+
+  // Custom tab change handler with animations
+  const handleTabChange = (newTab: 'home' | 'scan' | 'tracker' | 'info' | 'search' | 'profile' | 'articles') => {
+    if (newTab === currentTab) return;
+    
+    setPreviousTab(currentTab);
+    
+    // Animate out current screen
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: -20,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      // Change tab
+      setCurrentTab(newTab);
+      
+      // Animate in new screen
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    });
+  };
 
   const backgroundStyle = {
     backgroundColor: isDarkMode ? '#1a1a1a' : '#FEF7F7',
@@ -60,6 +110,11 @@ function App(): React.JSX.Element {
         // Load user profile from Supabase
         const profile = await userService.getProfile(currentUser.id);
         if (profile) {
+          // Load profile picture from AsyncStorage if not in database
+          const profilePicture = await userService.getProfilePicture(currentUser.id);
+          if (profilePicture) {
+            profile.profile_picture = profilePicture;
+          }
           setUserProfile(profile);
           // Check if user needs to complete questionnaire
           if (profile.account_status === 'pending') {
@@ -244,9 +299,11 @@ function App(): React.JSX.Element {
       });
       
       if (!res.canceled && res.assets[0]) {
-        // Handle scanned image here
+        // Navigate to scan screen and pass the image for analysis
         console.log('Scanned image:', res.assets[0].uri);
-        alert(`Successfully selected image: ${res.assets[0].fileName || 'Unknown'}`);
+        setSelectedImageUri(res.assets[0].uri);
+        setCurrentTab('scan');
+        // The ScanIngredients component will handle the analysis
       }
     } catch (error) {
       console.error('Error accessing photo library:', error);
@@ -284,23 +341,27 @@ function App(): React.JSX.Element {
           onBack={handleToolsComplete}
           onScanPress={() => {
             setShowTools(false);
-            setCurrentTab('scan');
+            handleTabChange('scan');
           }}
           onTrackerPress={() => {
             setShowTools(false);
-            setCurrentTab('tracker');
+            handleTabChange('tracker');
           }}
           onInfoPress={() => {
             setShowTools(false);
-            setCurrentTab('info');
+            handleTabChange('info');
           }}
           onSearchPress={() => {
             setShowTools(false);
-            setCurrentTab('search');
+            handleTabChange('search');
           }}
           onProfilePress={() => {
             setShowTools(false);
-            setCurrentTab('profile');
+            handleTabChange('profile');
+          }}
+          onArticlesPress={() => {
+            setShowTools(false);
+            setShowArticles(true);
           }}
           userProfile={userProfile}
         />
@@ -317,33 +378,54 @@ function App(): React.JSX.Element {
       );
     }
 
+    if (showArticles) {
+      return (
+        <ArticlesScreen
+          onBack={() => setShowArticles(false)}
+        />
+      );
+    }
+
     switch (currentTab) {
       case 'home':
         return (
           <HomeScreen
-            onScanPress={() => setCurrentTab('scan')}
-            onTrackerPress={() => setCurrentTab('tracker')}
-            onInfoPress={() => setCurrentTab('info')}
-            onProfilePress={() => setCurrentTab('profile')}
+            onScanPress={() => handleTabChange('scan')}
+            onProfilePress={() => handleTabChange('profile')}
             onSettingsPress={() => setShowQuestionnaire(true)}
+            onAddVitaminPress={() => handleTabChange('search')}
             userName={userProfile?.name || 'User'}
             userTrimester={userProfile?.trimester || 'not_pregnant'}
             isAuthenticated={isAuthenticated}
+            userProfilePicture={userProfile?.profile_picture}
+            onProfilePictureUpdate={async (newPicture: string) => {
+              if (userProfile) {
+                const updatedProfile = await userService.updateProfilePicture(userProfile.id, newPicture);
+                if (updatedProfile) {
+                  setUserProfile(updatedProfile);
+                }
+              }
+            }}
           />
         );
       case 'scan':
         return (
           <ScanIngredients
             onStartScanning={handleStartScanning}
-            onBack={() => setCurrentTab('home')}
-            onSearchPress={() => setCurrentTab('search')}
+            onBack={() => {
+              setSelectedImageUri(null); // Clear selected image when going back
+              handleTabChange('home');
+            }}
+            onSearchPress={() => handleTabChange('search')}
             userProfile={userProfile}
+            onCameraStateChange={setCameraActive}
+            imageToAnalyze={selectedImageUri || undefined}
           />
         );
       case 'tracker':
         return (
           <ModernVitaminTracker
-            onBack={() => setCurrentTab('home')}
+            onBack={() => handleTabChange('home')}
             userProfile={userProfile}
           />
         );
@@ -351,8 +433,8 @@ function App(): React.JSX.Element {
         return (
           <InformationScreen
             userTrimester={userProfile?.trimester || 'not_pregnant'}
-            onBack={() => setCurrentTab('home')}
-            onScanVitamins={() => setCurrentTab('scan')}
+            onBack={() => handleTabChange('home')}
+            onScanVitamins={() => handleTabChange('scan')}
           />
         );
       case 'search':
@@ -365,11 +447,18 @@ function App(): React.JSX.Element {
       case 'profile':
         return (
           <ProfileScreen
-            onBack={() => setCurrentTab('home')}
+            onBack={() => handleTabChange('home')}
             onSignOut={handleSignOut}
             userProfile={userProfile}
             onUpdateProfile={handleUpdateProfile}
             onReminderSettings={() => setShowReminderSettings(true)}
+          />
+        );
+      case 'articles':
+        return (
+          <ArticlesScreen
+            onBack={() => handleTabChange('home')}
+            showBackButton={false}
           />
         );
       default:
@@ -377,17 +466,41 @@ function App(): React.JSX.Element {
     }
   };
 
+  const paperTheme = {
+    ...MD3LightTheme,
+    colors: {
+      ...MD3LightTheme.colors,
+      primary: '#E91E63',
+      secondary: '#FF69B4',
+      background: '#FEF7F7',
+      surface: '#ffffff',
+      surfaceVariant: '#FFF0F5',
+    },
+  };
+
   return (
-    <SafeAreaView style={[backgroundStyle, {flex: 1}]}>
-      <ExpoStatusBar style={isDarkMode ? 'light' : 'dark'} />
-      {renderCurrentScreen()}
-      {!showQuestionnaire && !showTools && !showReminderSettings && !isLoading && (
-        <BottomNavigation
-          activeTab={currentTab}
-          onTabChange={setCurrentTab}
-        />
-      )}
-    </SafeAreaView>
+    <PaperProvider theme={paperTheme}>
+      <View style={[backgroundStyle, {flex: 1}]}>
+        <SafeAreaView style={{flex: 1}}>
+          <ExpoStatusBar style={isDarkMode ? 'light' : 'dark'} />
+          <Animated.View 
+            style={{
+              flex: 1,
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            }}
+          >
+            {renderCurrentScreen()}
+          </Animated.View>
+        </SafeAreaView>
+        {!showQuestionnaire && !showTools && !showReminderSettings && !showArticles && !isLoading && !cameraActive && (
+          <BottomNavigation
+            activeTab={currentTab}
+            onTabChange={handleTabChange}
+          />
+        )}
+      </View>
+    </PaperProvider>
   );
 }
 

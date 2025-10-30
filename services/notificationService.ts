@@ -9,7 +9,9 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
-  }),
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }) as any,
 });
 
 export interface ReminderSettings {
@@ -90,6 +92,7 @@ export const notificationService = {
           sound: 'default',
         },
         trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.CALENDAR,
           hour: hours,
           minute: minutes,
           repeats: true,

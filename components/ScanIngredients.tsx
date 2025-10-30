@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -11,19 +11,22 @@ import {
   Linking,
   Platform,
 } from 'react-native';
+import {CameraView, useCameraPermissions} from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {AnalysisResult} from '../services/IngredientAI';
 import { analyzeCurvedBottle, EnhancedAnalysisResult } from '../services/CurvedBottleAI';
 import {findIngredient} from '../services/IngredientKnowledgeBase';
-import { UserProfile } from '../services/supabase';
+import { UserProfile, userService, authService } from '../services/supabase';
 
 interface ScanIngredientsProps {
   onStartScanning: () => void;
   onBack: () => void;
   onSearchPress: () => void;
   userProfile?: UserProfile | null;
+  onCameraStateChange?: (isActive: boolean) => void;
+  imageToAnalyze?: string; // Optional image URI to analyze immediately
 }
 
 const ScanIngredients: React.FC<ScanIngredientsProps> = ({
@@ -31,9 +34,100 @@ const ScanIngredients: React.FC<ScanIngredientsProps> = ({
   onBack,
   onSearchPress,
   userProfile,
+  onCameraStateChange,
+  imageToAnalyze,
 }) => {
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [permission, requestPermission] = useCameraPermissions();
+  const [showCamera, setShowCamera] = useState(false);
+  const [libraryPermission, setLibraryPermission] = useState<boolean | null>(null);
+  const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(userProfile || null);
+
+  // Fetch user profile from Supabase if not provided
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (!userProfile) {
+        try {
+          const currentUser = await authService.getCurrentUser();
+          if (currentUser) {
+            const profile = await userService.getProfile(currentUser.id);
+            if (profile) {
+              setCurrentUserProfile(profile);
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching user profile:', error);
+        }
+      } else {
+        setCurrentUserProfile(userProfile);
+      }
+    };
+
+    fetchUserProfile();
+  }, [userProfile]);
+
+  // Request camera permission and show camera on mount
+  useEffect(() => {
+    const requestPermissions = async () => {
+      try {
+        // Request camera permission
+        if (!permission?.granted) {
+          await requestPermission();
+        }
+        
+        // Request library permission
+        const libraryStatus = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        setLibraryPermission(libraryStatus.status === 'granted');
+
+        // Don't auto-show camera - let user open it manually
+      } catch (error) {
+        console.error('Permission request error:', error);
+      }
+    };
+
+    requestPermissions();
+  }, [permission, requestPermission]);
+
+  // Notify parent when camera state changes - only when camera is actually visible
+  useEffect(() => {
+    // Only hide navigation when camera is actually showing
+    const isCameraActive = showCamera && !analysisResult;
+    console.log('🔍 Notifying parent - isCameraActive:', isCameraActive);
+    onCameraStateChange?.(isCameraActive);
+  }, [showCamera, analysisResult, onCameraStateChange]);
+
+  // Auto-analyze image if provided
+  useEffect(() => {
+    if (imageToAnalyze && !analyzing && !analysisResult) {
+      console.log('🖼️ Auto-analyzing provided image:', imageToAnalyze);
+      // Use a small delay to ensure component is fully mounted
+      const timer = setTimeout(() => {
+        analyzeImage(imageToAnalyze).catch((error) => {
+          console.error('❌ Error analyzing image:', error);
+          Alert.alert(
+            'Analysis Error',
+            `Failed to analyze the uploaded image: ${error instanceof Error ? error.message : 'Unknown error'}\n\n` +
+            'Please try:\n' +
+            '• Using a clearer image\n' +
+            '• Ensuring good lighting\n' +
+            '• Taking a photo directly',
+            [
+              { text: 'OK', style: 'default' },
+              { text: 'Try Again', onPress: () => {
+                if (imageToAnalyze && !analyzing) {
+                  analyzeImage(imageToAnalyze).catch(console.error);
+                }
+              }}
+            ]
+          );
+        });
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imageToAnalyze]);
   
   // PRODUCTION CONFIGURATION
   // Option 1: Use OpenAI Vision (BEST - $0.002 per scan, MUCH better than OCR!)
@@ -53,18 +147,19 @@ const ScanIngredients: React.FC<ScanIngredientsProps> = ({
   // NEW: Request ingredient descriptions from AI
   const GET_INGREDIENT_DESCRIPTIONS = true;
 
-  // Personalized analysis based on user profile
+  // Enhanced personalized analysis based on Supabase user profile
   const getPersonalizedAnalysis = (ingredients: any[]) => {
-    if (!userProfile) return { recommendations: [], warnings: [], focus: [] };
+    if (!currentUserProfile) return { recommendations: [], warnings: [], focus: [], personalizedCards: [] };
 
     const recommendations: string[] = [];
     const warnings: string[] = [];
     const focus: string[] = [];
+    const personalizedCards: any[] = [];
 
     // Check for allergies
-    if (userProfile.allergies && userProfile.allergies.length > 0) {
+    if (currentUserProfile.allergies && currentUserProfile.allergies.length > 0) {
       const foundAllergies = ingredients.filter(ing => 
-        userProfile.allergies.some(allergy => 
+        currentUserProfile.allergies.some(allergy => 
           ing.name.toLowerCase().includes(allergy.toLowerCase())
         )
       );
@@ -74,15 +169,32 @@ const ScanIngredients: React.FC<ScanIngredientsProps> = ({
       }
     }
 
-    // Check for trimester-specific recommendations
-    if (userProfile.trimester !== 'not_pregnant') {
+    // Check for dietary restrictions
+    if (currentUserProfile.dietary_restrictions && currentUserProfile.dietary_restrictions.length > 0) {
+      const dietaryWarnings = ingredients.filter(ing => {
+        const ingredientName = ing.name.toLowerCase();
+        return currentUserProfile.dietary_restrictions.some(restriction => {
+          const restrictionLower = restriction.toLowerCase();
+          return ingredientName.includes(restrictionLower) || 
+                 (restrictionLower.includes('vegetarian') && ingredientName.includes('gelatin')) ||
+                 (restrictionLower.includes('vegan') && (ingredientName.includes('gelatin') || ingredientName.includes('lactose')));
+        });
+      });
+      
+      if (dietaryWarnings.length > 0) {
+        warnings.push(`🚫 May conflict with dietary restrictions: ${dietaryWarnings.map(d => d.name).join(', ')}`);
+      }
+    }
+
+    // Enhanced trimester-specific recommendations
+    if (currentUserProfile.trimester !== 'not_pregnant') {
       const trimesterVitamins = {
-        first: ['Folic Acid', 'Iron', 'Vitamin D', 'B12'],
-        second: ['Iron', 'Vitamin D', 'Calcium', 'Omega-3'],
-        third: ['Iron', 'Vitamin D', 'Calcium', 'Vitamin K']
+        first: ['Folic Acid', 'Iron', 'Vitamin D', 'B12', 'Choline'],
+        second: ['Iron', 'Vitamin D', 'Calcium', 'Omega-3', 'DHA', 'EPA'],
+        third: ['Iron', 'Vitamin D', 'Calcium', 'Vitamin K', 'DHA']
       };
 
-      const recommendedForTrimester = trimesterVitamins[userProfile.trimester] || [];
+      const recommendedForTrimester = trimesterVitamins[currentUserProfile.trimester] || [];
       const foundRecommended = ingredients.filter(ing => 
         recommendedForTrimester.some(rec => 
           ing.name.toLowerCase().includes(rec.toLowerCase())
@@ -90,47 +202,145 @@ const ScanIngredients: React.FC<ScanIngredientsProps> = ({
       );
 
       if (foundRecommended.length > 0) {
-        recommendations.push(`✅ Great for ${userProfile.trimester} trimester: ${foundRecommended.map(f => f.name).join(', ')}`);
+        recommendations.push(`✅ Perfect for your ${currentUserProfile.trimester} trimester: ${foundRecommended.map(f => f.name).join(', ')}`);
+        
+        // Create personalized cards for each recommended vitamin
+        foundRecommended.forEach(vitamin => {
+          personalizedCards.push({
+            name: vitamin.name,
+            trimester: currentUserProfile.trimester,
+            dosage: vitamin.amount ? `${vitamin.amount} ${vitamin.unit}` : 'As directed',
+            benefits: getTrimesterSpecificBenefits(vitamin.name, currentUserProfile.trimester)
+          });
+        });
       }
     }
 
-    // Check focus areas
-    if (userProfile.focus_areas && userProfile.focus_areas.length > 0) {
-      focus.push(`🎯 Aligned with your focus: ${userProfile.focus_areas.join(', ')}`);
+    // Check focus areas and create personalized recommendations
+    if (currentUserProfile.focus_areas && currentUserProfile.focus_areas.length > 0) {
+      focus.push(`🎯 Aligned with your focus areas: ${currentUserProfile.focus_areas.join(', ')}`);
+      
+      // Create focus-specific recommendations
+      currentUserProfile.focus_areas.forEach(focusArea => {
+        const relevantIngredients = ingredients.filter(ing => 
+          isRelevantToFocusArea(ing.name, focusArea)
+        );
+        
+        if (relevantIngredients.length > 0) {
+          recommendations.push(`🌟 Great for ${focusArea}: ${relevantIngredients.map(i => i.name).join(', ')}`);
+        }
+      });
     }
 
-    return { recommendations, warnings, focus };
+    // Add user-specific dosage recommendations based on trimester
+    if (currentUserProfile.trimester !== 'not_pregnant') {
+      ingredients.forEach(ingredient => {
+        const recommendedDosage = getRecommendedDosage(ingredient.name, currentUserProfile.trimester);
+        if (recommendedDosage) {
+          recommendations.push(`Recommended dosage for ${currentUserProfile.trimester} trimester: ${recommendedDosage}`);
+        }
+      });
+    }
+
+    return { recommendations, warnings, focus, personalizedCards };
   };
 
-  // Expo Go HEIC conversion helper
-  const convertHEICForExpoGo = async (imageUri: string): Promise<string> => {
+  // Helper function to get trimester-specific benefits
+  const getTrimesterSpecificBenefits = (vitaminName: string, trimester: string) => {
+    const benefits: { [key: string]: { [key: string]: string } } = {
+      'Folic Acid': {
+        first: 'Prevents neural tube defects in early pregnancy',
+        second: 'Continues supporting fetal development',
+        third: 'Maintains healthy blood cell production'
+      },
+      'Iron': {
+        first: 'Prevents anemia during pregnancy',
+        second: 'Supports increased blood volume',
+        third: 'Prepares for delivery blood loss'
+      },
+      'Vitamin D': {
+        first: 'Supports bone development',
+        second: 'Enhances calcium absorption',
+        third: 'Strengthens bones for delivery'
+      },
+      'DHA': {
+        first: 'Early brain development',
+        second: 'Peak brain growth period',
+        third: 'Final brain development'
+      }
+    };
+    
+    return benefits[vitaminName]?.[trimester] || 'Essential nutrient for pregnancy';
+  };
+
+  // Helper function to check if ingredient is relevant to focus area
+  const isRelevantToFocusArea = (ingredientName: string, focusArea: string) => {
+    const focusMappings: { [key: string]: string[] } = {
+      'brain development': ['dha', 'epa', 'choline', 'folic acid', 'b12'],
+      'bone health': ['calcium', 'vitamin d', 'magnesium', 'vitamin k'],
+      'energy': ['iron', 'b12', 'folate', 'magnesium'],
+      'immune system': ['vitamin c', 'vitamin d', 'zinc', 'selenium'],
+      'heart health': ['omega-3', 'dha', 'epa', 'magnesium']
+    };
+    
+    const relevantNutrients = focusMappings[focusArea.toLowerCase()] || [];
+    return relevantNutrients.some((nutrient: string) => 
+      ingredientName.toLowerCase().includes(nutrient)
+    );
+  };
+
+  // Helper function to get recommended dosage based on trimester
+  const getRecommendedDosage = (vitaminName: string, trimester: string) => {
+    const dosages: { [key: string]: { [key: string]: string } } = {
+      'Folic Acid': {
+        first: '800-1000 mcg daily',
+        second: '600-800 mcg daily',
+        third: '600 mcg daily'
+      },
+      'Iron': {
+        first: '27 mg daily',
+        second: '30 mg daily',
+        third: '30 mg daily'
+      },
+      'DHA': {
+        first: '200-300 mg daily',
+        second: '300-400 mg daily',
+        third: '400 mg daily'
+      }
+    };
+    
+    return dosages[vitaminName]?.[trimester];
+  };
+
+  // Enhanced image conversion helper for OpenAI compatibility
+  const convertImageForOpenAI = async (imageUri: string): Promise<string> => {
     try {
-      // Check if it's a HEIC file
-      if (imageUri.toLowerCase().includes('.heic') || imageUri.toLowerCase().includes('.heif')) {
-        console.log('🔄 Converting HEIC to JPEG for Expo Go compatibility...');
-        console.log('🔍 Original imageUri:', imageUri);
-        
-        // For Expo Go, we'll try to read the image and let the system handle conversion
-        // The FileSystem.readAsStringAsync should handle HEIC conversion automatically
-        const base64 = await FileSystem.readAsStringAsync(imageUri, {
-          encoding: 'base64' as any,
-        });
-        
-        console.log('🔍 HEIC base64 length:', base64.length);
-        console.log('🔍 HEIC base64 preview:', base64.substring(0, 50));
-        
-        // Create a data URL that should work with OpenAI
-        // Try keeping original format first, then fallback to JPEG
-        const dataUrl = `data:image/heic;base64,${base64}`;
-        console.log('✅ HEIC converted to data URL for processing');
-        console.log('🔍 Data URL preview:', dataUrl.substring(0, 100));
-        return dataUrl;
+      console.log('🔄 Processing image for OpenAI API...');
+      console.log('🔍 Original imageUri:', imageUri);
+      
+      // Check if it's already a data URL
+      if (imageUri.startsWith('data:')) {
+        console.log('✅ Image is already a data URL');
+        return imageUri;
       }
       
-      return imageUri; // Return original if not HEIC
+      // For file URIs, convert to base64
+      console.log('🔄 Converting file URI to base64...');
+      const base64 = await FileSystem.readAsStringAsync(imageUri, {
+        encoding: 'base64' as any,
+      });
+      
+      // Always use JPEG format for OpenAI compatibility
+      // This handles HEIC/HEIF conversion automatically
+      const mimeType = 'image/jpeg';
+      
+      const dataUrl = `data:${mimeType};base64,${base64}`;
+      console.log('✅ Image converted to JPEG data URL');
+      return dataUrl;
+      
     } catch (error) {
-      console.warn('⚠️ HEIC conversion failed, using original:', error);
-      return imageUri; // Fallback to original
+      console.error('❌ Image conversion failed:', error);
+      throw new Error(`Image conversion failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -520,7 +730,7 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
           const backendResult = await analyzeWithBackend(imageUri);
           if (backendResult.success && backendResult.ingredients.length > 0) {
             console.log('✅ Backend OCR succeeded as fallback');
-            return backendResult;
+            return backendResult as any;
           }
         } catch (backendError) {
           console.warn('⚠️ Backend fallback also failed:', backendError);
@@ -601,7 +811,11 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
           ingredients: parsed.ingredients || [],
           warnings: parsed.warnings || [],
           rawResponse: content,
-        };
+          preprocessingApplied: [],
+          analysisMethod: 'single' as const,
+          confidenceScore: 85,
+          suggestions: [],
+        } as any;
       }
       
       // If all parsing failed, log the content for debugging
@@ -613,8 +827,12 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
       return {
         success: false,
         ingredients: [],
-        error: error instanceof Error ? error.message : 'Unknown error'
-      };
+        error: error instanceof Error ? error.message : 'Unknown error',
+        preprocessingApplied: [],
+        analysisMethod: 'single' as const,
+        confidenceScore: 0,
+        suggestions: [],
+      } as any;
     }
   };
 
@@ -720,13 +938,32 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
     };
   };
 
-  const analyzeImage = async (imageUri: string) => {
+  const analyzeImage = async (imageUri: string): Promise<void> => {
+    // Prevent multiple simultaneous analyses
+    if (analyzing) {
+      console.log('⏳ Analysis already in progress, skipping...');
+      return;
+    }
+    
     setAnalyzing(true);
     
     try {
+      // Validate image URI
+      if (!imageUri || imageUri.trim() === '') {
+        throw new Error('Invalid image URI provided');
+      }
+      
+      console.log('🔍 Starting image analysis for:', imageUri);
+      
       // Convert HEIC for Expo Go compatibility
-      const processedImageUri = await convertHEICForExpoGo(imageUri);
-      console.log('📱 Processed image URI for Expo Go:', processedImageUri);
+      let processedImageUri: string;
+      try {
+        processedImageUri = await convertImageForOpenAI(imageUri);
+        console.log('📱 Processed image URI:', processedImageUri.substring(0, 50) + '...');
+      } catch (conversionError) {
+        console.warn('⚠️ Image conversion failed, using original:', conversionError);
+        processedImageUri = imageUri; // Fallback to original
+      }
       
       let result: AnalysisResult;
       
@@ -740,11 +977,7 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
         console.log('🧠 Using OpenAI Vision API');
         result = await analyzeWithCurvedBottleAI(processedImageUri);
       } else {
-        Alert.alert(
-          'Configuration Error',
-          'Please configure either BACKEND_URL or OPENAI_API_KEY in ScanIngredients.tsx'
-        );
-        return;
+        throw new Error('Please configure either BACKEND_URL or OPENAI_API_KEY in ScanIngredients.tsx');
       }
       
       setAnalysisResult(result);
@@ -830,16 +1063,42 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
     }
   };
 
+  const takePicture = async () => {
+    try {
+      setShowCamera(false); // Hide camera while processing
+      
+      // Use ImagePicker to capture photo
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.8,
+        exif: false,
+        base64: false,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        console.log('📸 Photo taken:', result.assets[0].uri);
+        await analyzeImage(result.assets[0].uri);
+      } else {
+        // User canceled, show camera again
+        setShowCamera(true);
+      }
+    } catch (error) {
+      console.error('Error taking picture:', error);
+      Alert.alert('Error', 'Failed to take photo. Please try again.');
+      setShowCamera(true); // Re-show camera on error
+    }
+  };
+
   const handleCameraPress = async () => {
     try {
-      // Always request camera permission when button is pressed
+      // Request camera permission
       const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
       
       if (cameraPermission.status !== 'granted') {
-        // Permission denied - guide user to settings
         Alert.alert(
           'Camera Permission Required',
-          'We need camera access to take photos of vitamin labels for scanning. Please enable camera access in your device settings.',
+          'We need camera access to take photos of vitamin labels for scanning.',
           [
             { text: 'Cancel', style: 'cancel' },
             {
@@ -857,35 +1116,16 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
         return;
       }
 
-      // Launch camera with HEIC support for Expo Go
+      // Use ImagePicker as fallback
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.All, // Allow all media types including HEIC
-        allowsEditing: false, // Use full photo without cropping
-        quality: 1, // Highest quality for best scanning results
-        exif: false, // Don't include EXIF data to reduce file size
-        // Expo Go workaround: force conversion to JPEG
-        base64: false, // We'll handle conversion manually
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.8,
+        exif: false,
+        base64: false,
       });
 
       if (!result.canceled && result.assets[0]) {
-        console.log('📸 Photo taken:', result.assets[0].uri);
-        console.log('📸 Photo details:', {
-          uri: result.assets[0].uri,
-          width: result.assets[0].width,
-          height: result.assets[0].height,
-          fileSize: result.assets[0].fileSize,
-          type: result.assets[0].type,
-          mimeType: result.assets[0].mimeType
-        });
-        
-        // Check if it's a HEIC file from iPhone
-        const uri = result.assets[0].uri.toLowerCase();
-        const mimeType = result.assets[0].mimeType?.toLowerCase();
-        
-        if (uri.endsWith('.heic') || mimeType?.includes('heic')) {
-          console.log('📱 iPhone HEIC photo detected - excellent for scanning!');
-        }
-        
         await analyzeImage(result.assets[0].uri);
       }
     } catch (error) {
@@ -993,9 +1233,9 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
 
       // Launch photo library with HEIC support for Expo Go
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.All, // Allow all media types including HEIC
+        mediaTypes: ImagePicker.MediaTypeOptions.Images, // Allow all media types including HEIC
         allowsEditing: false, // Use full photo without cropping
-        quality: 1, // Highest quality
+        quality: 0.8, // Highest quality
         exif: false, // Don't include EXIF data to reduce file size
         // Expo Go workaround: force conversion to JPEG
         base64: false, // We'll handle conversion manually
@@ -1062,6 +1302,102 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
     }
   };
 
+  // Show camera view only when user explicitly opens it
+  if (showCamera && !analysisResult) {
+    return (
+      <View style={styles.cameraContainer}>
+        {permission?.granted ? (
+          <CameraView
+            style={styles.camera}
+          >
+            {/* Top bar with X button */}
+            <View style={styles.cameraTopBar}>
+              <TouchableOpacity 
+                style={styles.closeButton} 
+                onPress={() => setShowCamera(false)}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+              
+              <Text style={styles.scanTitle}>Scan Vitamin</Text>
+              
+              <TouchableOpacity 
+                style={styles.libraryButton} 
+                onPress={handleLibraryPress}
+              >
+                <Text style={styles.libraryButtonText}>🌸</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Scanning guide overlay */}
+            <View style={styles.scanningGuideContainer}>
+              <View style={styles.scanningGuideFrame}>
+                <View style={[styles.corner, styles.topLeft]} />
+                <View style={[styles.corner, styles.topRight]} />
+                <View style={[styles.corner, styles.bottomLeft]} />
+                <View style={[styles.corner, styles.bottomRight]} />
+              </View>
+              <Text style={styles.scanInstructionText}>Align your vitamin bottle in the frame</Text>
+            </View>
+
+            {/* Bottom capture button */}
+            <View style={styles.cameraBottomBar}>
+              <TouchableOpacity 
+                style={styles.scanNowButton} 
+                onPress={takePicture}
+              >
+                <Text style={styles.scanNowIcon}>💕</Text>
+                <Text style={styles.scanNowText}>Scan Now</Text>
+              </TouchableOpacity>
+            </View>
+          </CameraView>
+        ) : !permission ? (
+          <View style={styles.cameraContainer}>
+            <View style={styles.permissionContainer}>
+              <Text style={styles.permissionText}>Camera Permission Required</Text>
+              <Text style={styles.permissionSubtext}>
+                We need camera access to scan vitamin labels
+              </Text>
+              <TouchableOpacity 
+                style={styles.permissionButton}
+                onPress={async () => {
+                  const result = await requestPermission();
+                  if (result.granted) {
+                    setShowCamera(true);
+                  }
+                }}
+              >
+                <Text style={styles.permissionButtonText}>Grant Permission</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.backToMenuButton}
+                onPress={() => setShowCamera(false)}
+              >
+                <Text style={styles.backToMenuText}>Back to Menu</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.cameraContainer}>
+            <View style={styles.permissionContainer}>
+              <Text style={styles.permissionText}>Camera Access Denied</Text>
+              <Text style={styles.permissionSubtext}>
+                Please enable camera access in your device settings to use this feature.
+              </Text>
+              <TouchableOpacity 
+                style={styles.backToMenuButton}
+                onPress={() => setShowCamera(false)}
+              >
+                <Text style={styles.backToMenuText}>Back to Menu</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  }
+
+  // Show results or main menu
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -1070,48 +1406,12 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
           <Text style={styles.backIcon}>←</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Scan Ingredients</Text>
-        <View style={styles.placeholder} />
-      </View>
-
-      <ScrollView style={styles.scrollContainer}>
-        {/* Main Content */}
-        <View style={styles.content}>
-        {/* Camera Icon */}
-        <TouchableOpacity style={styles.cameraIconContainer} onPress={handleCameraPress}>
-          <View style={styles.cameraIcon}>
-            <Text style={styles.cameraEmoji}>📷</Text>
-          </View>
-          <Text style={styles.cameraLabel}>Take Photo</Text>
+        <TouchableOpacity 
+          style={styles.cameraToggle} 
+          onPress={() => setShowCamera(true)}
+        >
+          <Text style={styles.cameraToggleText}>💕</Text>
         </TouchableOpacity>
-
-        {/* Instructions */}
-        <View style={styles.instructionsContainer}>
-          <Text style={styles.instructionTitle}>
-            Scan your prenatal vitamin ingredients.
-          </Text>
-          <Text style={styles.instructionText}>
-            Take a photo, select from your library, or search for vitamins by name.{'\n'}
-            Ensure the text is clear and well-lit for accurate scanning.
-          </Text>
-        </View>
-
-        {/* Action Buttons */}
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.cameraButton} onPress={handleCameraPress}>
-            <Text style={styles.buttonIcon}>📷</Text>
-            <Text style={styles.buttonText}>Take Photo</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.libraryButton} onPress={handleLibraryPress}>
-            <Text style={styles.buttonIcon}>📱</Text>
-            <Text style={styles.buttonText}>Choose from Library</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.searchButton} onPress={onSearchPress}>
-            <Text style={styles.buttonIcon}>🔍</Text>
-            <Text style={styles.buttonText}>Search Vitamins</Text>
-          </TouchableOpacity>
-        </View>
       </View>
 
       {/* Analysis Loading */}
@@ -1123,30 +1423,102 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
         </View>
       )}
 
+      <ScrollView style={styles.scrollContainer} contentContainerStyle={{paddingBottom: 100}}>
+        {/* Main Content - only show if no results */}
+        {!analysisResult && (
+          <View style={styles.scanContent}>
+            {/* Camera Preview Card */}
+            <View style={styles.cameraPreviewCard}>
+              <View style={styles.cameraPreviewPlaceholder}>
+                <Text style={styles.cameraPreviewText}>💕</Text>
+                <Text style={styles.cameraPreviewLabel}>Camera Preview</Text>
+              </View>
+              <Text style={styles.alignInstruction}>Align your vitamin bottle in the frame</Text>
+            </View>
+
+            {/* Scan Now Button */}
+            <TouchableOpacity style={styles.scanNowMainButton} onPress={() => setShowCamera(true)}>
+              <Text style={styles.scanNowMainIcon}>💕</Text>
+              <Text style={styles.scanNowMainText}>Scan Now</Text>
+            </TouchableOpacity>
+
+            {/* Scan Status Card */}
+            <View style={styles.scanStatusCard}>
+              <Text style={styles.scanStatusTitle}>Scan Status</Text>
+              <Text style={styles.scanStatusText}>Results will appear here after scanning.</Text>
+            </View>
+
+            {/* Alternative Options */}
+            <View style={styles.alternativeOptions}>
+              <TouchableOpacity style={styles.alternativeButton} onPress={handleLibraryPress}>
+                <Text style={styles.alternativeButtonIcon}>🌸</Text>
+                <Text style={styles.alternativeButtonText}>Choose from Library</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.alternativeButton} onPress={onSearchPress}>
+                <Text style={styles.alternativeButtonIcon}>🌺</Text>
+                <Text style={styles.alternativeButtonText}>Search Vitamins</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
       {/* Analysis Results */}
       {analysisResult && analysisResult.success && !analyzing && (
         <View style={styles.resultsContainer}>
-          <Text style={styles.resultsTitle}>📋 Analysis Results</Text>
+          <Text style={styles.resultsTitle}>🌸 Analysis Results</Text>
           
           {/* Personalized Analysis */}
-          {userProfile && (() => {
+          {currentUserProfile && (() => {
             const personalized = getPersonalizedAnalysis(analysisResult.ingredients);
             return (
               <View style={styles.personalizedContainer}>
-                <Text style={styles.personalizedTitle}>🎯 Personalized for You</Text>
+                <Text style={styles.personalizedTitle}>
+                  🎯 Personalized for {currentUserProfile.name || 'You'}
+                </Text>
                 
+                {/* User Profile Summary */}
+                <View style={styles.profileSummary}>
+                  <Text style={styles.profileText}>
+                    {currentUserProfile.trimester !== 'not_pregnant' 
+                      ? `Currently in ${currentUserProfile.trimester} trimester`
+                      : 'General health focus'
+                    }
+                  </Text>
+                  {currentUserProfile.focus_areas && currentUserProfile.focus_areas.length > 0 && (
+                    <Text style={styles.profileText}>
+                      Focus areas: {currentUserProfile.focus_areas.join(', ')}
+                    </Text>
+                  )}
+                </View>
+                
+                {/* Personalized Recommendations */}
                 {personalized.recommendations.map((rec, index) => (
                   <View key={index} style={styles.personalizedCard}>
                     <Text style={styles.personalizedText}>{rec}</Text>
                   </View>
                 ))}
                 
+                {/* Personalized Cards for Trimester-Specific Vitamins */}
+                {personalized.personalizedCards.map((card, index) => (
+                  <View key={index} style={styles.trimesterCard}>
+                    <View style={styles.trimesterCardHeader}>
+                      <Text style={styles.trimesterCardTitle}>{card.name}</Text>
+                      <Text style={styles.trimesterBadge}>{card.trimester} Trimester</Text>
+                    </View>
+                    <Text style={styles.trimesterCardDosage}>Recommended: {card.dosage}</Text>
+                    <Text style={styles.trimesterCardBenefits}>{card.benefits}</Text>
+                  </View>
+                ))}
+                
+                {/* Warnings */}
                 {personalized.warnings.map((warning, index) => (
                   <View key={index} style={styles.warningCard}>
                     <Text style={styles.warningText}>{warning}</Text>
                   </View>
                 ))}
                 
+                {/* Focus Areas */}
                 {personalized.focus.map((focus, index) => (
                   <View key={index} style={styles.focusCard}>
                     <Text style={styles.focusText}>{focus}</Text>
@@ -1156,14 +1528,14 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
             );
           })()}
           
-          {analysisResult.productName && (
+          {analysisResult.productName && analysisResult.productName !== 'Unknown Product' && (
             <View style={styles.resultCard}>
               <Text style={styles.resultLabel}>Product</Text>
               <Text style={styles.resultValue}>{analysisResult.productName}</Text>
             </View>
           )}
 
-          {analysisResult.servingSize && (
+          {analysisResult.servingSize && analysisResult.servingSize !== 'Unknown' && (
             <View style={styles.resultCard}>
               <Text style={styles.resultLabel}>Serving Size</Text>
               <Text style={styles.resultValue}>{analysisResult.servingSize}</Text>
@@ -1171,6 +1543,7 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
           )}
 
           {/* Show OCR debug info (always in debug mode, or when zero ingredients) */}
+          {/* COMMENTED OUT FOR PRODUCTION
           {(DEBUG_MODE || analysisResult.ingredients.length === 0) && analysisResult.rawResponse && (
             <View style={styles.debugCard}>
               <Text style={styles.debugTitle}>🔍 Debug Info</Text>
@@ -1195,11 +1568,12 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
               )}
             </View>
           )}
+          */}
 
           <View style={styles.ingredientsCard}>
             <View style={styles.ingredientsCountBanner}>
               <Text style={styles.ingredientsCountIcon}>
-                {analysisResult.ingredients.length > 0 ? '✅' : '⚠️'}
+                {analysisResult.ingredients.length > 0 ? '🌸' : '🌺'}
               </Text>
               <Text style={styles.ingredientsHeader}>
                 {analysisResult.ingredients.length > 0 
@@ -1224,97 +1598,63 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
               const ingredientInfo = findIngredient(ingredient.name);
               // Prioritize AI-generated description, fall back to knowledge base
               const aiDescription = ingredient.description || ingredient.benefits;
-              const knowledgeBaseDescription = ingredientInfo?.benefits || ingredientInfo?.description;
+              const hasAIDescription = !!(ingredient.description || ingredient.benefits);
+              const knowledgeBaseDescription = ingredientInfo?.benefits;
               const finalDescription = aiDescription || knowledgeBaseDescription;
               
               return (
-                <View key={index} style={styles.ingredientDetailCard}>
-                  <View style={styles.ingredientHeader}>
-                    <View style={styles.ingredientBullet}>
-                      <Text style={styles.bulletText}>•</Text>
+                <View key={index} style={styles.recommendationCard}>
+                  {/* Product Info Row */}
+                  <View style={styles.productHeader}>
+                    <View style={styles.productInfo}>
+                      <Text style={styles.productName}>{ingredient.name}</Text>
+                      <Text style={styles.productBrand}>Detected Ingredient</Text>
+                      <View style={styles.productLabel}>
+                        <Text style={styles.productLabelText}>Scanned</Text>
                     </View>
-                    <View style={styles.ingredientHeaderInfo}>
-                      <Text style={styles.ingredientName}>{ingredient.name}</Text>
-                      <Text style={styles.ingredientDosage}>
-                        {ingredient.amount || 'Unknown'} {ingredient.unit || 'Unknown'}
-                        {ingredient.percentDailyValue && ` (${ingredient.percentDailyValue} DV)`}
-                      </Text>
                     </View>
                   </View>
-                  
-                  {/* Description (AI-generated or Knowledge Base) */}
-                  {finalDescription && (
-                    <View style={styles.ingredientBenefits}>
-                      <View style={styles.benefitRow}>
-                        <Text style={styles.benefitIcon}>🤰</Text>
-                        <Text style={styles.benefitText}>
-                          {finalDescription}
-                        </Text>
+
+                  {/* Key Benefits - only show if there's meaningful content */}
+                  {(finalDescription || ingredientInfo?.benefits) && (
+                    <View style={styles.benefitsSection}>
+                      <Text style={styles.benefitsTitle}>Key Benefits:</Text>
+                      <Text style={styles.benefitText}>• {finalDescription || ingredientInfo?.benefits}</Text>
+                    </View>
+                  )}
+
+                  {/* Dosage Information */}
+                  {ingredient.unit && (
+                    <View style={styles.dosageSection}>
+                      <Text style={styles.dosageText}>
+                        Dosage: {ingredient.amount || '?'} {ingredient.unit}
+                        {ingredient.percentDailyValue && ` (${ingredient.percentDailyValue})`}
+                          </Text>
+                        </View>
+                      )}
+                      
+                  {/* Ingredient Analysis Section - only show if there are warnings */}
+                  {ingredientInfo?.warnings && ingredientInfo.warnings.length > 0 && (
+                    <View style={styles.analysisSection}>
+                      <View style={styles.analysisHeader}>
+                        <Text style={styles.analysisIcon}>🌺</Text>
+                        <Text style={styles.analysisTitle}>Ingredient Analysis</Text>
+                        <Text style={styles.analysisArrow}>▼</Text>
                       </View>
                       
-                      {/* Also show pregnancy recommendation from knowledge base if available */}
-                      {ingredientInfo?.pregnancyRecommendation && (
-                        <View style={styles.benefitRow}>
-                          <Text style={styles.benefitIcon}>💊</Text>
-                          <Text style={styles.benefitText}>
-                            <Text style={styles.benefitLabel}>Recommended: </Text>
-                            {ingredientInfo.pregnancyRecommendation}
-                          </Text>
-                        </View>
-                      )}
-                      
-                      {ingredientInfo?.warnings && ingredientInfo.warnings.length > 0 && (
-                        <View style={styles.benefitRow}>
-                          <Text style={styles.benefitIcon}>⚠️</Text>
-                          <Text style={styles.benefitText}>
-                            {ingredientInfo.warnings.join(', ')}
-                          </Text>
-                        </View>
-                      )}
+                      {/* Warnings/Alerts */}
+                      <View style={styles.alertRow}>
+                        <Text style={styles.alertIcon}>🌺</Text>
+                        <Text style={styles.alertText}>1 New</Text>
+                      </View>
                     </View>
                   )}
-                  
-                  {/* Fallback to Knowledge Base if no AI description */}
-                  {!hasAIDescription && ingredientInfo && (
-                    <View style={styles.ingredientBenefits}>
-                      {ingredientInfo.benefits && (
-                        <View style={styles.benefitRow}>
-                          <Text style={styles.benefitIcon}>🤰</Text>
-                          <Text style={styles.benefitText}>
-                            {ingredientInfo.benefits}
-                          </Text>
-                        </View>
-                      )}
-                      
-                      {ingredientInfo.pregnancyRecommendation && (
-                        <View style={styles.benefitRow}>
-                          <Text style={styles.benefitIcon}>💊</Text>
-                          <Text style={styles.benefitText}>
-                            <Text style={styles.benefitLabel}>Recommended: </Text>
-                            {ingredientInfo.pregnancyRecommendation}
-                          </Text>
-                        </View>
-                      )}
-                      
-                      {ingredientInfo.warnings && ingredientInfo.warnings.length > 0 && (
-                        <View style={styles.benefitRow}>
-                          <Text style={styles.benefitIcon}>⚠️</Text>
-                          <Text style={styles.benefitText}>
-                            {ingredientInfo.warnings.join(', ')}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  )}
-                  
-                  {/* No information available */}
-                  {!hasAIDescription && !ingredientInfo && (
-                    <View style={styles.ingredientBenefits}>
-                      <Text style={styles.noInfoText}>
-                        ℹ️ No additional information available for this ingredient
-                      </Text>
-                    </View>
-                  )}
+
+                  {/* Action Button */}
+                  <TouchableOpacity style={styles.addToTrackButton}>
+                    <Text style={styles.addToTrackIcon}>🌸</Text>
+                    <Text style={styles.addToTrackText}>Add to Daily Track</Text>
+                  </TouchableOpacity>
                 </View>
               );
             })}
@@ -1322,7 +1662,7 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
 
           {analysisResult.warnings && analysisResult.warnings.length > 0 && (
             <View style={styles.warningsCard}>
-              <Text style={styles.warningsHeader}>⚠️ Warnings</Text>
+              <Text style={styles.warningsHeader}>🌺 Warnings</Text>
               {analysisResult.warnings.map((warning, index) => (
                 <Text key={index} style={styles.warningText}>• {warning}</Text>
               ))}
@@ -1332,7 +1672,7 @@ Be thorough - extract EVERY vitamin, mineral, and nutrient from the Supplement F
           <TouchableOpacity 
             style={styles.saveButton}
             onPress={saveToTracker}>
-            <Text style={styles.saveButtonText}>💾 Save to Tracker</Text>
+            <Text style={styles.saveButtonText}>🌸 Save to Tracker</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1381,6 +1721,119 @@ const styles = StyleSheet.create({
   placeholder: {
     width: 40,
   },
+  cameraContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  camera: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  cameraTopBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    paddingBottom: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  closeButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 22,
+  },
+  closeButtonText: {
+    fontSize: 20,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  scanTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+    letterSpacing: 1,
+  },
+  libraryButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 22,
+  },
+  libraryButtonText: {
+    fontSize: 20,
+  },
+  cameraBottomBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  instructionsBox: {
+    flex: 1,
+    marginRight: 12,
+  },
+  captureButton: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderWidth: 4,
+    borderColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  captureButtonInner: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#fff',
+  },
+  searchButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 22,
+  },
+  searchButtonGhost: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchButtonText: {
+    fontSize: 20,
+    color: '#fff',
+  },
+  cameraInstructionText: {
+    fontSize: 14,
+    color: '#fff',
+    textAlign: 'center',
+  },
+  permissionText: {
+    color: '#fff',
+    fontSize: 16,
+    textAlign: 'center',
+    marginTop: 20,
+  },
+  cameraToggle: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cameraToggleText: {
+    fontSize: 24,
+  },
   content: {
     flex: 1,
     alignItems: 'center',
@@ -1418,21 +1871,21 @@ const styles = StyleSheet.create({
   },
   instructionsContainer: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 20,
+    marginTop: 10,
   },
   instructionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
+    fontSize: 22,
+    fontWeight: 'bold',
     color: '#E91E63',
     textAlign: 'center',
-    marginBottom: 16,
-    lineHeight: 30,
+    marginBottom: 8,
   },
   instructionText: {
-    fontSize: 16,
-    color: '#9E9E9E',
+    fontSize: 14,
+    color: '#666',
     textAlign: 'center',
-    lineHeight: 24,
+    paddingHorizontal: 30,
   },
   buttonContainer: {
     width: '100%',
@@ -1452,7 +1905,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  libraryButton: {
+  libraryButtonAction: {
     backgroundColor: '#FFB6C1',
     flexDirection: 'row',
     alignItems: 'center',
@@ -1466,7 +1919,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  searchButton: {
+  searchButtonAction: {
     backgroundColor: '#4CAF50',
     flexDirection: 'row',
     alignItems: 'center',
@@ -1491,9 +1944,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   analyzingContainer: {
-    padding: 32,
+    padding: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
   },
   analyzingText: {
     marginTop: 16,
@@ -1637,12 +2093,6 @@ const styles = StyleSheet.create({
     marginRight: 8,
     marginTop: 2,
   },
-  benefitText: {
-    flex: 1,
-    fontSize: 13,
-    color: '#555',
-    lineHeight: 18,
-  },
   benefitLabel: {
     fontWeight: '600',
     color: '#333',
@@ -1758,6 +2208,182 @@ const styles = StyleSheet.create({
     color: '#2E5BBA',
     fontWeight: '500',
   },
+  profileSummary: {
+    backgroundColor: '#FFF',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  profileText: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  trimesterCard: {
+    backgroundColor: '#FFF0F5',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#FFB6C1',
+  },
+  trimesterCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  trimesterCardTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#E91E63',
+  },
+  trimesterBadge: {
+    backgroundColor: '#E91E63',
+    color: '#FFF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  trimesterCardDosage: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+    fontWeight: '500',
+  },
+  trimesterCardBenefits: {
+    fontSize: 14,
+    color: '#555',
+    lineHeight: 20,
+  },
+  recommendationCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  productHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  productInfo: {
+    flex: 1,
+  },
+  productName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  productBrand: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+  },
+  productLabel: {
+    backgroundColor: '#E91E63',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  productLabelText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  benefitsSection: {
+    marginBottom: 16,
+  },
+  benefitsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+  },
+  benefitText: {
+    fontSize: 14,
+    color: '#555',
+    lineHeight: 20,
+  },
+  dosageSection: {
+    marginBottom: 16,
+  },
+  dosageText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  analysisSection: {
+    marginBottom: 16,
+  },
+  analysisHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  analysisIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  analysisTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    flex: 1,
+  },
+  analysisArrow: {
+    fontSize: 12,
+    color: '#666',
+  },
+  alertRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFEBEE',
+    padding: 8,
+    borderRadius: 6,
+    borderLeftWidth: 3,
+    borderLeftColor: '#F44336',
+  },
+  alertIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  alertText: {
+    fontSize: 12,
+    color: '#F44336',
+    fontWeight: '600',
+  },
+  addToTrackButton: {
+    backgroundColor: '#E91E63',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  addToTrackIcon: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    marginRight: 8,
+    fontWeight: 'bold',
+  },
+  addToTrackText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   warningCard: {
     backgroundColor: '#FFF3E0',
     padding: 12,
@@ -1776,6 +2402,321 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#7B1FA2',
     fontWeight: '500',
+  },
+  ingredientDetailCardNew: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  ingredientHeaderNew: {
+    marginBottom: 8,
+  },
+  ingredientNameNew: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#E91E63',
+    marginBottom: 4,
+  },
+  ingredientDosageNew: {
+    fontSize: 13,
+    color: '#666',
+    fontWeight: '500',
+  },
+  ingredientBenefitsNew: {
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+  },
+  benefitTextNew: {
+    fontSize: 13,
+    color: '#555',
+    lineHeight: 18,
+  },
+  smallActionButton: {
+    flex: 1,
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    marginHorizontal: 8,
+  },
+  smallButtonIcon: {
+    fontSize: 18,
+    marginRight: 8,
+  },
+  smallButtonText: {
+    color: '#666',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  scanningGuideContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    pointerEvents: 'none',
+  },
+  scanningGuideFrame: {
+    width: 280,
+    height: 280,
+    position: 'relative',
+  },
+  corner: {
+    position: 'absolute',
+    width: 20,
+    height: 20,
+    borderColor: '#fff',
+    borderWidth: 3,
+  },
+  topLeft: {
+    top: 0,
+    left: 0,
+    borderRightWidth: 0,
+    borderBottomWidth: 0,
+  },
+  topRight: {
+    top: 0,
+    right: 0,
+    borderLeftWidth: 0,
+    borderBottomWidth: 0,
+  },
+  bottomLeft: {
+    bottom: 0,
+    left: 0,
+    borderRightWidth: 0,
+    borderTopWidth: 0,
+  },
+  bottomRight: {
+    bottom: 0,
+    right: 0,
+    borderLeftWidth: 0,
+    borderTopWidth: 0,
+  },
+  vitaminCard: {
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  vitaminName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  vitaminSubtitle: {
+    fontSize: 14,
+    color: '#666',
+  },
+  sectionCard: {
+    backgroundColor: '#F8F8F8',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+  },
+  bulletPoint: {
+    fontSize: 14,
+    color: '#555',
+    lineHeight: 20,
+    marginBottom: 6,
+  },
+  permissionContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  permissionSubtext: {
+    fontSize: 14,
+    color: '#fff',
+    textAlign: 'center',
+    marginTop: 10,
+    marginBottom: 30,
+  },
+  permissionButton: {
+    backgroundColor: '#FF69B4',
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  permissionButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  backToMenuButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  backToMenuText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  scanContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  cameraPreviewCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  cameraPreviewPlaceholder: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+    height: 200,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  cameraPreviewText: {
+    fontSize: 48,
+    marginBottom: 8,
+  },
+  cameraPreviewLabel: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '500',
+  },
+  alignInstruction: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
+  scanNowMainButton: {
+    backgroundColor: '#FF69B4',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    shadowColor: '#FF69B4',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  scanNowMainIcon: {
+    fontSize: 20,
+    marginRight: 8,
+    color: '#fff',
+  },
+  scanNowMainText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  scanStatusCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 1},
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  scanStatusTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  scanStatusText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  alternativeOptions: {
+    gap: 12,
+  },
+  alternativeButton: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 1},
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  alternativeButtonIcon: {
+    fontSize: 20,
+    marginRight: 12,
+  },
+  alternativeButtonText: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
+  },
+  scanInstructionText: {
+    fontSize: 14,
+    color: '#fff',
+    textAlign: 'center',
+    marginTop: 20,
+    fontWeight: '500',
+  },
+  scanNowButton: {
+    backgroundColor: '#FF69B4',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#FF69B4',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  scanNowIcon: {
+    fontSize: 20,
+    marginRight: 8,
+    color: '#fff',
+  },
+  scanNowText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

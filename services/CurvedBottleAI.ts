@@ -143,12 +143,18 @@ async function analyzeWithCurvedBottlePrompt(
   try {
     let base64Image: string;
     
-    if (imageUri.startsWith('data:')) {
+    // If it's already a data URL (like our converted JPEG), use it directly
+    if (imageUri.startsWith('data:image')) {
       base64Image = imageUri;
+      console.log('📱 Using data URL:', imageUri.substring(0, 50) + '...');
     } else {
-      const response = await fetch(imageUri);
-      const blob = await response.blob();
-      base64Image = await blobToBase64(blob);
+      // For local file URIs, read with FileSystem (better for React Native)
+      const FileSystem = require('expo-file-system').default;
+      const base64 = await FileSystem.readAsStringAsync(imageUri, {
+        encoding: 'base64',
+      });
+      base64Image = `data:image/jpeg;base64,${base64}`;
+      console.log('📱 Converted file URI to JPEG data URL');
     }
 
     const apiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -158,7 +164,7 @@ async function analyzeWithCurvedBottlePrompt(
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'gpt-4o',
+        model: 'gpt-4o-mini', // Use mini for speed
         messages: [
           {
             role: 'user',
@@ -171,14 +177,14 @@ async function analyzeWithCurvedBottlePrompt(
                 type: 'image_url',
                 image_url: {
                   url: base64Image,
-                  detail: 'high', // Use highest detail for curved surfaces
+                  detail: 'auto', // Optimize for speed
                 },
               },
             ],
           },
         ],
-        max_tokens: 3000,
-        temperature: 0.05, // Very low temperature for consistency
+        max_tokens: 2000, // Reduced for faster response
+        temperature: 0.1, // Low temperature for consistency
       }),
     });
 

@@ -1,0 +1,116 @@
+.App {
+  text-align: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #FEF7F7 0%, #FFE4E1 100%);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.header {
+  margin-bottom: 40px;
+}
+
+.logo {
+  font-size: 3rem;
+  font-weight: bold;
+  color: #E91E63;
+  margin-bottom: 10px;
+}
+
+.subtitle {
+  font-size: 1.5rem;
+  color: #666;
+  font-weight: 300;
+}
+
+.support-content {
+  margin-bottom: 50px;
+}
+
+.support-card {
+  background: white;
+  padding: 40px 30px;
+  border-radius: 20px;
+  box-shadow: 0 4px 15px rgba(233, 30, 99, 0.1);
+  margin-bottom: 30px;
+}
+
+.support-card h2 {
+  color: #E91E63;
+  margin-bottom: 20px;
+  font-size: 2rem;
+}
+
+.support-card p {
+  color: #666;
+  line-height: 1.6;
+  margin-bottom: 15px;
+  font-size: 1.1rem;
+}
+
+.email-contact {
+  margin-top: 25px;
+}
+
+.email-link {
+  color: #E91E63;
+  text-decoration: none;
+  font-weight: bold;
+  font-size: 1.2rem;
+  padding: 10px 20px;
+  border: 2px solid #E91E63;
+  border-radius: 25px;
+  display: inline-block;
+  transition: all 0.3s ease;
+}
+
+.email-link:hover {
+  background: #E91E63;
+  color: white;
+  text-decoration: none;
+}
+
+.footer {
+  text-align: center;
+  padding: 30px 0;
+  border-top: 1px solid #E91E63;
+  margin-top: 50px;
+}
+
+.footer p {
+  color: #666;
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 15px;
+  }
+  
+  .logo {
+    font-size: 2.5rem;
+  }
+  
+  .subtitle {
+    font-size: 1.2rem;
+  }
+  
+  .support-card {
+    padding: 30px 20px;
+  }
+  
+  .support-card h2 {
+    font-size: 1.5rem;
+  }
+  
+  .support-card p {
+    font-size: 1rem;
+  }
+}
