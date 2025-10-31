@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VitaMom - AI Image Analysis</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 40px;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: #252526;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #4EC9B0;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+        .subtitle {
+            color: #858585;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .code-block {
+            background: #1e1e1e;
+            border: 1px solid #3e3e3e;
+            border-radius: 4px;
+            padding: 20px;
+            overflow-x: auto;
+            margin: 20px 0;
+            font-size: 12px;
+        }
+        .comment {
+            color: #6A9955;
+        }
+        .keyword {
+            color: #569CD6;
+        }
+        .string {
+            color: #CE9178;
+        }
+        .function {
+            color: #DCDCAA;
+        }
+        .annotation {
+            background: #2d2d30;
+            padding: 15px;
+            border-left: 4px solid #4EC9B0;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .annotation-title {
+            color: #4EC9B0;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 AI-Powered Image Analysis</h1>
+        <p class="subtitle">components/ScanIngredients.tsx - OpenAI Vision API Integration</p>
+        
+        <div class="annotation">
+            <div class="annotation-title">Feature:</div>
+            Uses OpenAI GPT-4 Vision API to analyze vitamin labels from photos, even on curved bottles.
+        </div>
+
+        <div class="code-block">
+<pre><span class="comment">// Enhanced image analysis with error handling</span>
+<span class="keyword">const</span> <span class="function">analyzeImage</span> = <span class="keyword">async</span> (<span class="function">imageUri</span>: <span class="keyword">string</span>): <span class="keyword">Promise</span>&lt;<span class="keyword">void</span>&gt; => {
+  <span class="comment">// Prevent multiple simultaneous analyses</span>
+  <span class="keyword">if</span> (<span class="function">analyzing</span>) {
+    <span class="keyword">return</span>;
+  }
+  
+  <span class="function">setAnalyzing</span>(<span class="keyword">true</span>);
+  
+  <span class="keyword">try</span> {
+    <span class="comment">// Validate image URI</span>
+    <span class="keyword">if</span> (!<span class="function">imageUri</span> || <span class="function">imageUri.trim</span>() === <span class="string">''</span>) {
+      <span class="keyword">throw</span> <span class="keyword">new</span> <span class="function">Error</span>(<span class="string">'Invalid image URI provided'</span>);
+    }
+    
+    <span class="comment">// Convert HEIC for compatibility</span>
+    <span class="keyword">let</span> <span class="function">processedImageUri</span>: <span class="keyword">string</span>;
+    <span class="keyword">try</span> {
+      <span class="function">processedImageUri</span> = <span class="keyword">await</span> <span class="function">convertImageForOpenAI</span>(<span class="function">imageUri</span>);
+    } <span class="keyword">catch</span> (<span class="function">conversionError</span>) {
+      <span class="function">processedImageUri</span> = <span class="function">imageUri</span>; <span class="comment">// Fallback</span>
+    }
+    
+    <span class="keyword">let</span> <span class="function">result</span>: <span class="function">AnalysisResult</span>;
+    
+    <span class="keyword">if</span> (<span class="function">USE_OPENAI</span> && <span class="function">OPENAI_API_KEY</span>) {
+      <span class="keyword">console.log</span>(<span class="string">'🧠 Using OpenAI Vision API'</span>);
+      <span class="function">result</span> = <span class="keyword">await</span> <span class="function">analyzeWithCurvedBottleAI</span>(<span class="function">processedImageUri</span>);
+    }
+    
+    <span class="function">setAnalysisResult</span>(<span class="function">result</span>);
+    
+    <span class="keyword">if</span> (<span class="function">result.success</span>) {
+      <span class="function">Alert.alert</span>(
+        <span class="string">'✅ Analysis Complete!'</span>,
+        <span class="string">`Found ${result.ingredients.length} ingredients`</span>
+      );
+    }
+  } <span class="keyword">catch</span> (<span class="function">error</span>) {
+    <span class="comment">// Comprehensive error handling</span>
+    <span class="function">Alert.alert</span>(<span class="string">'Analysis Error'</span>, <span class="function">error.message</span>);
+  } <span class="keyword">finally</span> {
+    <span class="function">setAnalyzing</span>(<span class="keyword">false</span>);
+  }
+};</pre>
+        </div>
+
+        <div class="annotation">
+            <div class="annotation-title">Key Features:</div>
+            • OpenAI GPT-4 Vision API integration<br>
+            • HEIC image format support<br>
+            • Comprehensive error handling with retry options<br>
+            • Automatic ingredient extraction from labels
+        </div>
+    </div>
+</body>
+</html>
+
+

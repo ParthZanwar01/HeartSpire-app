@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VitaMom - Main App Structure</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 40px;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: #252526;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #4EC9B0;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+        .subtitle {
+            color: #858585;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .code-block {
+            background: #1e1e1e;
+            border: 1px solid #3e3e3e;
+            border-radius: 4px;
+            padding: 20px;
+            overflow-x: auto;
+            margin: 20px 0;
+            font-size: 12px;
+        }
+        .comment {
+            color: #6A9955;
+        }
+        .keyword {
+            color: #569CD6;
+        }
+        .string {
+            color: #CE9178;
+        }
+        .function {
+            color: #DCDCAA;
+        }
+        .annotation {
+            background: #2d2d30;
+            padding: 15px;
+            border-left: 4px solid #4EC9B0;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .annotation-title {
+            color: #4EC9B0;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚙️ Main App Structure</h1>
+        <p class="subtitle">App.tsx - Navigation, State Management & User Authentication</p>
+        
+        <div class="code-block">
+<pre><span class="keyword">function</span> <span class="function">App</span>(): <span class="function">React.JSX.Element</span> {
+  <span class="keyword">const</span> [<span class="function">currentTab</span>, <span class="function">setCurrentTab</span>] = <span class="function">useState</span>&lt;
+    <span class="string">'home' | 'scan' | 'tracker' | 'info' | 'search' | 'profile'</span>
+  &gt;(<span class="string">'home'</span>);
+  
+  <span class="keyword">const</span> [<span class="function">userProfile</span>, <span class="function">setUserProfile</span>] = <span class="function">useState</span>&lt;
+    <span class="function">UserProfile</span> | <span class="keyword">null</span>
+  &gt;(<span class="keyword">null</span>);
+  
+  <span class="keyword">const</span> [<span class="function">isAuthenticated</span>, <span class="function">setIsAuthenticated</span>] = <span class="function">useState</span>(<span class="keyword">false</span>);
+
+  <span class="comment">// Animation state for smooth page transitions</span>
+  <span class="keyword">const</span> <span class="function">fadeAnim</span> = <span class="function">useRef</span>(<span class="keyword">new</span> <span class="function">Animated.Value</span>(<span class="number">1</span>)).<span class="function">current</span>;
+  <span class="keyword">const</span> <span class="function">slideAnim</span> = <span class="function">useRef</span>(<span class="keyword">new</span> <span class="function">Animated.Value</span>(<span class="number">0</span>)).<span class="function">current</span>;
+
+  <span class="comment">// Smooth animated tab transitions</span>
+  <span class="keyword">const</span> <span class="function">handleTabChange</span> = (<span class="function">newTab</span>) => {
+    <span class="function">Animated.parallel</span>([
+      <span class="function">Animated.timing</span>(<span class="function">fadeAnim</span>, {
+        <span class="function">toValue</span>: <span class="number">0</span>,
+        <span class="function">duration</span>: <span class="number">150</span>,
+        <span class="function">useNativeDriver</span>: <span class="keyword">true</span>,
+      }),
+      <span class="function">Animated.timing</span>(<span class="function">slideAnim</span>, {
+        <span class="function">toValue</span>: -<span class="number">20</span>,
+        <span class="function">duration</span>: <span class="number">150</span>,
+        <span class="function">useNativeDriver</span>: <span class="keyword">true</span>,
+      }),
+    ]).<span class="function">start</span>(() => {
+      <span class="function">setCurrentTab</span>(<span class="function">newTab</span>);
+      <span class="comment">// Animate in new screen</span>
+      <span class="function">Animated.parallel</span>([...]).<span class="function">start</span>();
+    });
+  };
+
+  <span class="comment">// Load user profile and authentication</span>
+  <span class="function">useEffect</span>(() => {
+    <span class="function">checkAuthAndLoadProfile</span>();
+  }, []);
+
+  <span class="keyword">const</span> <span class="function">checkAuthAndLoadProfile</span> = <span class="keyword">async</span> () => {
+    <span class="keyword">const</span> <span class="function">currentUser</span> = <span class="keyword">await</span> <span class="function">authService.getCurrentUser</span>();
+    <span class="keyword">if</span> (<span class="function">currentUser</span>) {
+      <span class="function">setIsAuthenticated</span>(<span class="keyword">true</span>);
+      <span class="keyword">const</span> <span class="function">profile</span> = <span class="keyword">await</span> <span class="function">userService.getProfile</span>(<span class="function">currentUser.id</span>);
+      <span class="function">setUserProfile</span>(<span class="function">profile</span>);
+    }
+  };
+}</pre>
+        </div>
+
+        <div class="annotation">
+            <div class="annotation-title">Key Features:</div>
+            • Smooth animated page transitions<br>
+            • Supabase authentication integration<br>
+            • User profile state management<br>
+            • Type-safe navigation with TypeScript
+        </div>
+    </div>
+</body>
+</html>
+
+
