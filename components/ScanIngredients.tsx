@@ -15,6 +15,7 @@ import {CameraView, useCameraPermissions} from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { OPENAI_API_KEY, BACKEND_URL } from '@env';
 import {AnalysisResult} from '../services/IngredientAI';
 import { analyzeCurvedBottle, EnhancedAnalysisResult } from '../services/CurvedBottleAI';
 import {findIngredient} from '../services/IngredientKnowledgeBase';
@@ -132,11 +133,9 @@ const ScanIngredients: React.FC<ScanIngredientsProps> = ({
   // PRODUCTION CONFIGURATION
   // Option 1: Use OpenAI Vision (BEST - $0.002 per scan, MUCH better than OCR!)
   const USE_OPENAI = true; // Using GPT-4 Vision for better results!
-  const OPENAI_API_KEY = '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';
   
   // Option 2: Use your Python backend (FREE but OCR quality varies)
   const USE_BACKEND = false; // Disabled - OCR has poor quality
-  const BACKEND_URL = 'https://MathGenius01-vitamom-backend.hf.space';
   
   // Option 3: Mock mode for testing
   const USE_MOCK = false;

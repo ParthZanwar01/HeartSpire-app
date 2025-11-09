@@ -1,5 +1,5 @@
 // Articles Service - Fetches factual, evidence-based information from ChatGPT
-const OPENAI_API_KEY = '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';
+import { OPENAI_API_KEY } from '@env';
 
 export interface ArticleContent {
   title: string;

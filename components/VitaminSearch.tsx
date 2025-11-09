@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { OPENAI_API_KEY } from '@env';
 import { UserProfile } from '../services/supabase';
 import { findIngredient, INGREDIENT_DATABASE } from '../services/IngredientKnowledgeBase';
 
@@ -36,9 +37,6 @@ const VitaminSearch: React.FC<VitaminSearchProps> = ({
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<VitaminInfo[]>([]);
   const [selectedVitamin, setSelectedVitamin] = useState<VitaminInfo | null>(null);
-
-  // ChatGPT API configuration
-  const OPENAI_API_KEY = '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';
 
   // Helper function to get trimester-specific recommendations
   const getTrimesterRecommendation = (vitaminName: string): string => {
